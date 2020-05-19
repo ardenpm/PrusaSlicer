@@ -54,6 +54,7 @@
 #include "Mouse3DController.hpp"
 #include "RemovableDriveManager.hpp"
 #include "InstanceCheck.hpp"
+#include "NotificationManager.hpp"
 
 #ifdef __WXMSW__
 #include <dbt.h>
@@ -444,6 +445,8 @@ bool GUI_App::on_init_inner()
             app_config->save();
 
         this->obj_manipul()->update_if_dirty();
+
+		//this->plater()->get_notification_manager()->render_notification(*(this->plater()->get_current_canvas3D()));
 
 		// Preset updating & Configwizard are done after the above initializations,
 	    // and after MainFrame is created & shown.

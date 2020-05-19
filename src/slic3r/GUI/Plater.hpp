@@ -47,6 +47,7 @@ class ObjectLayers;
 class ObjectList;
 class GLCanvas3D;
 class Mouse3DController;
+class NotificationManager;
 struct Camera;
 class Bed3D;
 class GLToolbar;
@@ -338,6 +339,9 @@ public:
     Mouse3DController& get_mouse3d_controller();
 
 	void set_bed_shape() const;
+    
+	const NotificationManager* get_notification_manager() const;
+	NotificationManager* get_notification_manager();
 
     // ROII wrapper for suppressing the Undo / Redo snapshot to be taken.
 	class SuppressSnapshots

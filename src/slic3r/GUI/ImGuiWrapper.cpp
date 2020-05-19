@@ -262,6 +262,11 @@ void ImGuiWrapper::set_next_window_bg_alpha(float alpha)
     ImGui::SetNextWindowBgAlpha(alpha);
 }
 
+void ImGuiWrapper::set_next_window_size(float x, float y, ImGuiCond cond)
+{
+	ImGui::SetNextWindowSize(ImVec2(x, y), cond);
+}
+
 bool ImGuiWrapper::begin(const std::string &name, int flags)
 {
     return ImGui::Begin(name.c_str(), nullptr, (ImGuiWindowFlags)flags);
@@ -291,6 +296,12 @@ bool ImGuiWrapper::button(const wxString &label)
 {
     auto label_utf8 = into_u8(label);
     return ImGui::Button(label_utf8.c_str());
+}
+
+bool ImGuiWrapper::button(const wxString& label, float width, float height)
+{
+	auto label_utf8 = into_u8(label);
+	return ImGui::Button(label_utf8.c_str(), ImVec2(width, height));
 }
 
 bool ImGuiWrapper::radio_button(const wxString &label, bool active)

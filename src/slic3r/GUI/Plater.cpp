@@ -2041,14 +2041,23 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     });
 #endif /* _WIN32 */
 
-    this->q->Bind(EVT_REMOVABLE_DRIVE_EJECTED, [this](RemovableDriveEjectEvent &evt) {
+	notification_manager = new NotificationManager(this->q);
+    
+	this->q->Bind(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, [this](EjectDriveNotificationClickedEvent&) { this->q->eject_drive(); });
+
+	this->q->Bind(EVT_REMOVABLE_DRIVE_EJECTED, [this, q](RemovableDriveEjectEvent &evt) {
 		if (evt.data.second) {
 			this->show_action_buttons(this->ready_to_slice);
-			Slic3r::GUI::show_info(this->q, format_wxstr(_L("Unmounting successful. The device %s(%s) can now be safely removed from the computer."),
-				evt.data.first.name, evt.data.first.path));
+			//Slic3r::GUI::show_info(this->q, format_wxstr(_L("Unmounting successful. The device %s(%s) can now be safely removed from the computer."),
+			//	evt.data.first.name, evt.data.first.path));
+			notification_manager->push_notification("Unmounting successful. The device "+evt.data.first.name+"("+ evt.data.first.path +") can now be safely removed from the computer.", NotificationManager::NotificationLevel::RegularNotification, *q->get_current_canvas3D());
 		} else
-			Slic3r::GUI::show_info(this->q, format_wxstr(_L("Ejecting of device %s(%s) has failed."),
-				evt.data.first.name, evt.data.first.path));
+		{
+			//Slic3r::GUI::show_info(this->q, format_wxstr(_L("Ejecting of device %s(%s) has failed."),
+			//	evt.data.first.name, evt.data.first.path));
+			notification_manager->push_notification("Ejecting of device " + evt.data.first.name + "(" + evt.data.first.path + ") has failed.", NotificationManager::NotificationLevel::ErrorNotification, *q->get_current_canvas3D());
+
+		}
 	});
     this->q->Bind(EVT_REMOVABLE_DRIVES_CHANGED, [this](RemovableDrivesChangedEvent &) { this->show_action_buttons(this->ready_to_slice); });
     // Start the background thread and register this window as a target for update events.
@@ -2090,7 +2099,7 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
     // collapse sidebar according to saved value
     bool is_collapsed = wxGetApp().app_config->get("collapsed_sidebar") == "1";
     sidebar->collapse(is_collapsed);
-	
+
 	notification_manager = new NotificationManager();
 }
 
@@ -3467,7 +3476,7 @@ void Plater::priv::on_process_completed(wxCommandEvent &evt)
     this->statusbar()->reset_cancel_callback();
     this->statusbar()->stop_busy();
 
-	notification_manager->push_notification("Process completed", *q->get_current_canvas3D());
+	//notification_manager->push_notification("Process completed", *q->get_current_canvas3D());
 
     const bool canceled = evt.GetInt() < 0;
     const bool error = evt.GetInt() == 0;
@@ -3518,8 +3527,11 @@ void Plater::priv::on_process_completed(wxCommandEvent &evt)
         show_action_buttons(true);
     }
     else if (this->writing_to_removable_device || wxGetApp().get_mode() == comSimple)
+	{
 		show_action_buttons(false);
-    this->writing_to_removable_device = false;
+		notification_manager->push_notification(NotificationType::ExportToRemovableFinished, *q->get_current_canvas3D());
+	}
+	this->writing_to_removable_device = false;
 }
 
 void Plater::priv::on_layer_editing_toggled(bool enable)

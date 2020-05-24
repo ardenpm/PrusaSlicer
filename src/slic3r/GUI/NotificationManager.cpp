@@ -4,21 +4,33 @@
 #include "GLCanvas3D.hpp"
 #include "ImGuiWrapper.hpp"
 
+#include "wxExtensions.hpp"
+
 #include <wx/glcanvas.h>
 #include <iostream>
 
 
+
+
 #define NOTIFICATION_MAX_MOVE 3.0f
+
+#define GAP_WIDTH 10.0f
+#define SPACE_RIGHT_PANEL 10.0f
 
 namespace Slic3r {
 namespace GUI {
 
+wxDEFINE_EVENT(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, EjectDriveNotificationClickedEvent);
+
+//ScalableBitmap bmp_icon;
 //------PopNotification--------
-NotificationManager::PopNotification::PopNotification(const NotificationData &n, const int id) :
+NotificationManager::PopNotification::PopNotification(const NotificationData &n, const int id, wxEvtHandler* evt_handler) :
 	  m_data          (n)
 	, m_id            (id)    
 	, m_creation_time (wxGetLocalTime())
+	, m_evt_handler   (evt_handler)
 {
+	//bmp_icon = ScalableBitmap(wxGetApp().plater_, "eject_sd", bmp_px_cnt);
 }
 //NotificationManager::PopNotification::~PopNotification()
 //{}
@@ -44,6 +56,7 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	std::string     name;
 
 	//movent
+	/*
 	if (m_target_x != initial_x + m_window_height)
 	{
 		m_target_x = initial_x + m_window_height;
@@ -57,15 +70,25 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	}
 	if (m_current_x > m_target_x)
 		m_current_x = m_target_x;
-
-	imgui.set_next_window_pos(1.0f * (float)cnv_size.get_width(), 1.0f * (float)cnv_size.get_height() - m_current_x, ImGuiCond_Always, 1.0f, 0.0f);
+		*/
+	
+	//background color
+	//ImVec4 backcolor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+	//backcolor.w = 0.5f;
+	//ImGui::PushStyleColor(ImGuiCol_WindowBg, backcolor);
+	//top of window
+	m_target_x = initial_x + m_window_height;
+	ImVec2 window_pos(1.0f * (float)cnv_size.get_width() - SPACE_RIGHT_PANEL, 1.0f * (float)cnv_size.get_height() - m_target_x);
+	imgui.set_next_window_pos(window_pos.x, window_pos.y, ImGuiCond_Always, 1.0f, 0.0f);
 	//set_next_window_size should be calculated with respect to size of all notifications and text
-	imgui.set_next_window_size(200, 60, ImGuiCond_Always);
+	ImVec2 text1_size = ImGui::CalcTextSize(m_data.text1.c_str());
+	int window_height = (text1_size.x > 350 ? 90 : 55);
+	imgui.set_next_window_size(450, window_height, ImGuiCond_Always);
 
 	//name of window - probably indentifies window and is shown so i add whitespaces according to id
 	for (size_t i = 0; i < m_id; i++)
 		name += " ";
-	if (imgui.begin(name, &shown, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar)) {
+	if (imgui.begin(name, &shown, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
 		if (shown) {
 			ImVec2 win_size = ImGui::GetWindowSize();
 			m_window_height = win_size.y;
@@ -75,33 +98,152 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 			//boost::format(_utf8(L(
 			
 			//way to set position of next element in window
-			//ImGui::SetCursorPosX(50);
+			//ImGui::SetCursorPosY(30);
+			//ImGui::SetCursorPosX(100);
+			
 
-			//FIXME coloring of elements based on level
+			/*
 			ImGuiCol_ level_color_tag;
 			switch (m_data.level) {
 			    case NotificationLevel::RegularNotification: level_color_tag = ImGuiCol_WindowBg; break;
 			    case NotificationLevel::ErrorNotification: level_color_tag = ImGuiCol_Header;  break;
 			    case NotificationLevel::ImportantNotification: level_color_tag = ImGuiCol_Button; break;
 			}
+			*/
 			//push&pop style color set color (first will heave color of second). pop after push or you get crash!  
-			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetStyleColorVec4(level_color_tag));
-			const ImVec4& backcolor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-			ImGui::PushStyleColor(ImGuiCol_Button, backcolor); 
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, backcolor);
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, backcolor);
+			//ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
+			//const ImVec4& backcolor = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
+			
 
-			//just text
-			//imgui.text(m_data.text.c_str());
 
+			//ImGui::GetFont()->FontSize = 35;
+
+			//notification text 1
+			std::string fulltext = m_data.text1 + m_data.hypertext + m_data.text2;
+			ImVec2 text_size = ImGui::CalcTextSize(fulltext.c_str());
+			float cursor_y = win_size.y / 2 - text_size.y / 2;
+			if(text1_size.x > 350) { // split in half
+				//first half
+				cursor_y = win_size.y / 2 - win_size.y / 6 - text_size.y / 2;
+				int half = m_data.text1.find_first_of(' ', m_data.text1.length() / 2 - 1);
+				std::string first_half_text1 = m_data.text1.substr(0, half);
+				std::string second_half_text1 = m_data.text1.substr(half);
+				ImVec2 first_half_text1_size = ImGui::CalcTextSize(first_half_text1.c_str());
+				ImGui::SetCursorPosX(win_size.x / 2 - first_half_text1_size.x / 2);
+				ImGui::SetCursorPosY(cursor_y);
+				imgui.text(first_half_text1.c_str());
+				//second half
+				cursor_y = win_size.y / 2 + win_size.y / 6 - text_size.y / 2;
+				fulltext = second_half_text1 + m_data.hypertext + m_data.text2;
+				text_size = ImGui::CalcTextSize(fulltext.c_str());
+				ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2);
+				ImGui::SetCursorPosY(cursor_y);
+				imgui.text(second_half_text1.c_str());
+			} else {
+				ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2);
+				ImGui::SetCursorPosY(cursor_y);
+				imgui.text(m_data.text1.c_str());
+			}
+			
+			
+
+
+			//notification hyperlink text
+			if(!m_data.hypertext.empty())
+			{
+				ImVec2 prev_size = ImGui::CalcTextSize(m_data.text1.c_str());
+				ImVec2 part_size = ImGui::CalcTextSize(m_data.hypertext.c_str());
+				ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 + prev_size.x);
+				ImGui::SetCursorPosY(cursor_y - 5);
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.0f, .0f, .0f, .0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.0f, .0f, .0f, .0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.0f, .0f, .0f, .0f));
+				//ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
+				//ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 0.7f));
+				if (imgui.button("", part_size.x + 6, part_size.y + 10))
+				{
+					on_text_click();
+					m_close_pending = true;
+				}
+				ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 + prev_size.x + 2);
+				ImGui::SetCursorPosY(cursor_y);
+				imgui.text(m_data.hypertext.c_str());
+				ImGui::PopStyleColor();
+				ImGui::PopStyleColor();
+				ImGui::PopStyleColor();
+				//ImGui::PopStyleColor();
+
+				if (ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+				//ImVec2 lineStart(window_pos.x - win_size.x + win_size.x / 2 - text_size.x / 2 + prev_size.x, window_pos.y - win_size.y / 2 - part_size.y);
+				//ImVec2 lineEnd = lineStart;
+				//lineEnd.x += part_size.x;
+				
+				ImVec2 lineEnd = ImGui::GetItemRectMax();
+				lineEnd.y -= 2;
+				ImVec2 lineStart = lineEnd;
+				lineStart.x = ImGui::GetItemRectMin().x;
+				ImVec4 text_color = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+				ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, IM_COL32((int)(text_color.x * 255), (int)(text_color.y * 255), (int)(text_color.z * 255), (int)(text_color.w * 255)));
+
+				
+			}
+
+			//notification text 2
+			if (!m_data.text2.empty())
+			{
+				ImVec2 part_size = ImGui::CalcTextSize(m_data.hypertext.c_str());
+				ImGui::SetCursorPosX(win_size.x / 2 + text_size.x / 2 - part_size.x + 4);
+				ImGui::SetCursorPosY(cursor_y);
+
+				imgui.text(m_data.text2.c_str());
+			}
+			
+
+			//bool IsItemHovered();      // is the last item hovered by mouse (and usable)? or we are currently using Nav and the item is focused.
+			//bool IsItemHoveredRect();  // is the last item hovered by mouse? even if another item is active or window is blocked by popup while we are hovering this
+			
+			if(ImGui::IsItemHovered())
+			{
+				ImGui::SetWindowFocus();
+			}
+			
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.0f, .0f, .0f, .0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
+
+			//ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.75f, .75f, .75f, 1.f));
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
+			ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, ImVec4(0, .75f, .75f, 1.f));
+
+			ImGui::SetCursorPosX(win_size.x - 40);
+			ImGui::SetCursorPosY(win_size.y / 2 - 15/*- text_size.y / 2*/);
 			//button - if part if treggered
-			if (imgui.button(m_data.text.c_str(), 170, 40))
+			if (imgui.button("X", 30, 30))
+			{
 				m_close_pending = true;
+			}
 
 			ImGui::PopStyleColor();
- 			ImGui::PopStyleColor();
 			ImGui::PopStyleColor();
 			ImGui::PopStyleColor();
+			ImGui::PopStyleColor();
+			ImGui::PopStyleColor();
+
+#ifdef __APPLE__
+			int bmp_px_cnt = 16;
+#else
+			int bmp_px_cnt = 32;
+#endif //__APPLE__
+			//ScalableBitmap bmp = ScalableBitmap(wxGetApp().plater_, "eject_sd", bmp_px_cnt);
+			//const wxBitmap& wxbmp = bmp_icon.bmp();
+			//ImTextureID texture_id;
+			//ImGui::Image(,);
+			//ImGui::ImageButton();
+
+			
+			//ImGui::PopStyleColor();
 			
 		} else {
 			// the user clicked on the [X] button ( ImGuiWindowFlags_NoTitleBar means theres no [X] button)
@@ -109,17 +251,31 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 			canvas.set_as_dirty();
 		}
 	}
+	//ImGui::PopStyleColor();
 	imgui.end();
 	return ret_val;
+}
+void NotificationManager::PopNotification::on_text_click()
+{
+	switch (m_data.type)
+	{
+	case NotificationType::ExportToRemovableFinished :
+		assert(m_evt_handler != nullptr);
+		if (m_evt_handler != nullptr)
+			wxPostEvent(m_evt_handler, EjectDriveNotificationClickedEvent(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED));
+		break;
+	default:
+		break;
+	}
 }
 void NotificationManager::PopNotification::update()
 {
 	m_creation_time = wxGetLocalTime();
 }
 //------NotificationManager--------
-NotificationManager::NotificationManager()
-{
-}
+NotificationManager::NotificationManager(wxEvtHandler* evt_handler) :
+	m_evt_handler(evt_handler)
+{}
 NotificationManager::~NotificationManager()
 {
 	for (PopNotification* notification : m_pop_notifications)
@@ -132,16 +288,34 @@ void NotificationManager::push_notification(const NotificationType type, GLCanva
 	auto it = std::find_if(basic_notifications.begin(), basic_notifications.end(),
 		boost::bind(&NotificationData::type, _1) == type);	
 	if (it != basic_notifications.end())
-		push_notification( *it, canvas);
+		push_notification_data( *it, canvas);
 }
 void NotificationManager::push_notification(const std::string& text, GLCanvas3D& canvas)
 {
-	push_notification({ NotificationType::CustomNotification, NotificationLevel::RegularNotification, text, 10  }, canvas );
+	push_notification_data({ NotificationType::CustomNotification, NotificationLevel::RegularNotification, 10, text }, canvas );
 }
-void NotificationManager::push_notification(const NotificationData &notification_data,  GLCanvas3D& canvas)
+void NotificationManager::push_notification(const std::string& text, NotificationManager::NotificationLevel level, GLCanvas3D& canvas)
+{
+	switch (level)
+	{
+	case Slic3r::GUI::NotificationManager::NotificationLevel::RegularNotification:
+		push_notification_data({ NotificationType::CustomNotification, level, 10, text }, canvas);
+		break;
+	case Slic3r::GUI::NotificationManager::NotificationLevel::ErrorNotification:
+		push_notification_data({ NotificationType::CustomNotification, level, 0, text }, canvas);
+		break;
+	case Slic3r::GUI::NotificationManager::NotificationLevel::ImportantNotification:
+		push_notification_data({ NotificationType::CustomNotification, level, 0, text }, canvas);
+		break;
+	default:
+		break;
+	}
+	
+}
+void NotificationManager::push_notification_data(const NotificationData &notification_data,  GLCanvas3D& canvas)
 {
 	if (!this->find_older(notification_data.type))
-		m_pop_notifications.emplace_back(new PopNotification(notification_data, m_next_id++));
+		m_pop_notifications.emplace_back(new PopNotification(notification_data, m_next_id++, m_evt_handler));
 	else
 		m_pop_notifications.back()->update();
 	//std::cout << "PUSH: " << text << std::endl;
@@ -161,7 +335,7 @@ void NotificationManager::render_notifications(GLCanvas3D& canvas)
 		} else {
 			PopNotification::RenderResult res = (*it)->render(canvas, last_x);
 			if (res != PopNotification::RenderResult::Finished) {
-				last_x = (*it)->get_top();
+				last_x = (*it)->get_top() + GAP_WIDTH;
 				current_height = std::max(current_height, (*it)->get_current_top());
 				render_main = true;
 			}
@@ -172,8 +346,8 @@ void NotificationManager::render_notifications(GLCanvas3D& canvas)
 	}
 	if (request_next_frame)
 		canvas.request_extra_frame();
-	if (render_main)
-		this->render_main_window(canvas, current_height);
+	//if (render_main)
+	//	this->render_main_window(canvas, current_height);
 }
 
 void NotificationManager::render_main_window(GLCanvas3D& canvas, float height)

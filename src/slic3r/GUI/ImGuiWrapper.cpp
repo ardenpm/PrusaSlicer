@@ -310,6 +310,11 @@ bool ImGuiWrapper::radio_button(const wxString &label, bool active)
     return ImGui::RadioButton(label_utf8.c_str(), active);
 }
 
+bool ImGuiWrapper::image_button()
+{
+	return false;
+}
+
 bool ImGuiWrapper::input_double(const std::string &label, const double &value, const std::string &format)
 {
     return ImGui::InputDouble(label.c_str(), const_cast<double*>(&value), 0.0f, 0.0f, format.c_str());

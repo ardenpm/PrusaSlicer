@@ -68,6 +68,7 @@ public:
     bool button(const wxString &label);
 	bool button(const wxString& label, float width, float height);
     bool radio_button(const wxString &label, bool active);
+	bool image_button();
     bool input_double(const std::string &label, const double &value, const std::string &format = "%.3f");
     bool input_double(const wxString &label, const double &value, const std::string &format = "%.3f");
     bool input_vec3(const std::string &label, const Vec3d &value, float width, const std::string &format = "%.3f");

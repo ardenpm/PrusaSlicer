@@ -91,7 +91,7 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	//BOOST_LOG_TRIVIAL(error) << mouse_pos.x << "," << mouse_pos.y;
 	if (mouse_pos.x < window_pos.x && mouse_pos.x > window_pos.x - 450 && mouse_pos.y > window_pos.y&& mouse_pos.y < window_pos.y + window_height)
 	{
-		BOOST_LOG_TRIVIAL(error) << "mouse";
+		//BOOST_LOG_TRIVIAL(error) << "mouse";
 		ImGui::SetNextWindowFocus();
 		//ImGui::SetNextWindowSize(ImVec2(500,500));
 	}
@@ -112,11 +112,11 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 			//ImGui::SetCursorPosY(30);
 			//ImGui::SetCursorPosX(100);
 			
-			if (ImGui::IsItemHovered(ImGuiHoveredFlags_RootAndChildWindows))
-			{
+			//if (ImGui::IsItemHovered(ImGuiHoveredFlags_RootAndChildWindows))
+			//{
 				
-				BOOST_LOG_TRIVIAL(error) << "hover";
-			}
+				//BOOST_LOG_TRIVIAL(error) << "hover";
+			//}
 
 			/*
 			ImGuiCol_ level_color_tag;
@@ -189,11 +189,12 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 				ImGui::PopStyleColor();
 
 				ImVec4 orange_color = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+				
 				if (ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
 				{
 					//ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
 					orange_color.y += 0.2f;
-					BOOST_LOG_TRIVIAL(error) << "text button hover";
+					//BOOST_LOG_TRIVIAL(error) << "text button hover";
 				}
 				ImGui::PushStyleColor(ImGuiCol_Text, orange_color);
 				ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 + prev_size.x + 4 - x_offset);
@@ -234,8 +235,12 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 			
 			
 			
+			ImVec4 orange_color = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+			orange_color.w = 0.8f;
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.0f, .0f, .0f, .0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.0f, .0f, .0f, .0f));
+			//ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.0f, .0f, .0f, .0f));
+			//ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
 			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
 
 			//ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.75f, .75f, .75f, 1.f));
@@ -245,7 +250,15 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 			ImGui::SetCursorPosX(win_size.x - 40);
 			ImGui::SetCursorPosY(win_size.y / 2 - 15/*- text_size.y / 2*/);
 			//button - if part if treggered
-			if (imgui.button("X", 30, 30))
+			std::string button_text;
+			button_text = ImGui::CloseIconMarker;
+			if (ImGui::IsMouseHoveringRect(ImVec2(window_pos.x - 45, window_pos.y + win_size.y / 2 - 15),
+				                           ImVec2(window_pos.x - 15, window_pos.y + win_size.y / 2 + 15),
+				                           true))
+			{
+				button_text = ImGui::CloseIconHoverMarker;
+			}
+			if (imgui.button(button_text.c_str(), 30, 30))
 			{
 				m_close_pending = true;
 			}
@@ -261,7 +274,7 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 #else
 			int bmp_px_cnt = 32;
 #endif //__APPLE__
-			ScalableBitmap bmp = ScalableBitmap(wxGetApp().plater(), "eject_sd", bmp_px_cnt);
+			//ScalableBitmap bmp = ScalableBitmap(wxGetApp().plater(), "eject_sd", bmp_px_cnt);
 			//const wxBitmap& wxbmp = bmp_icon.bmp();
 			ImTextureID texture_id;
 			//ImGui::Image(,);

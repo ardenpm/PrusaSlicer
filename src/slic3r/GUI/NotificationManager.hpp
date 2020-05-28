@@ -20,10 +20,15 @@ enum class NotificationType
 {
 	CustomNotification,
 	SlicingComplete,
-	//DeviceEjected,
+	SlicingNotPossible,
 	ExportToRemovableFinished,
 	Mouse3dDisconnected,
-	Mouse3dConnected
+	Mouse3dConnected,
+	NewPresetsAviable,
+	NewAppAviable,
+	PresetUpdateAviable,
+	LoadingFailed,
+
 };
 class NotificationManager
 {
@@ -116,9 +121,15 @@ private:
 	//prepared notifications
 	const std::vector<NotificationData> basic_notifications = {
 		{NotificationType::SlicingComplete, NotificationLevel::RegularNotification, 5, "Slicing finished."/*, "clickable", "fisnisher" */},
+		{NotificationType::SlicingNotPossible, NotificationLevel::RegularNotification, 10, "Slicing is not possible."},
 		{NotificationType::ExportToRemovableFinished, NotificationLevel::ImportantNotification, 0, "Exporting finished.", "Eject drive." },
 		{NotificationType::Mouse3dDisconnected, NotificationLevel::RegularNotification, 10, "3d Mouse disconnected." },
 		{NotificationType::Mouse3dConnected, NotificationLevel::RegularNotification, 5, "3d Mouse connected." },
+		{NotificationType::NewPresetsAviable, NotificationLevel::RegularNotification, 15, "New Presets are aviable.", "See here." },
+		{NotificationType::NewAppAviable, NotificationLevel::RegularNotification, 15, "New vesion of PrusaSlicer is aviable.", "Download." },
+		{NotificationType::PresetUpdateAviable, NotificationLevel::RegularNotification, 5, "Preset update is aviable.", "Update."},
+		//{NotificationType::LoadingFailed, NotificationLevel::RegularNotification, 20, "Loading of model has Failed" },
+
 		//{NotificationType::DeviceEjected, NotificationLevel::RegularNotification, 10, "Removable device has been safely ejected"} // if we want changeble text (like here name of device), we need to do it as CustomNotification
 		//{NotificationType::SlicingComplete, NotificationLevel::ImportantNotification, 10, Unmounting successful.The device% s(% s) can now be safely removed from the computer." }
 		//			Slic3r::GUI::show_info(this->q, format_wxstr(_L("Unmounting successful. The device %s(%s) can now be safely removed from the computer."),

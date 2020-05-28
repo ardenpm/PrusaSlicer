@@ -41,7 +41,9 @@ static const std::map<const char, std::string> font_icons = {
     {ImGui::PrinterIconMarker   , "printer"    },
     {ImGui::PrinterSlaIconMarker, "sla_printer"},
     {ImGui::FilamentIconMarker  , "spool"      },
-    {ImGui::MaterialIconMarker  , "resin"      }
+    {ImGui::MaterialIconMarker  , "resin"      },
+	{ImGui::CloseIconMarker     , "cross"      },
+	{ImGui::CloseIconHoverMarker, "cross_focus"}
 };
 
 ImGuiWrapper::ImGuiWrapper()

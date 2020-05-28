@@ -7,6 +7,7 @@
 #include "AppConfig.hpp"
 #include "GLCanvas3D.hpp"
 #include "Plater.hpp"
+#include "NotificationManager.hpp"
 
 #include <wx/glcanvas.h>
 

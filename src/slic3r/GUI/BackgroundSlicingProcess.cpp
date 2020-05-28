@@ -89,7 +89,10 @@ void BackgroundSlicingProcess::process_fff()
 {
 	assert(m_print == m_fff_print);
     m_print->process();
-	wxQueueEvent(GUI::wxGetApp().mainframe->m_plater, new wxCommandEvent(m_event_slicing_completed_id));
+	wxCommandEvent evt(m_event_slicing_completed_id);
+	evt.SetInt((int)(m_fff_print->step_state_with_timestamp(PrintStep::psBrim).timestamp));
+	wxQueueEvent(GUI::wxGetApp().mainframe->m_plater, evt.Clone());
+ 	//wxQueueEvent(GUI::wxGetApp().mainframe->m_plater, new wxCommandEvent(m_event_slicing_completed_id));
     m_fff_print->export_gcode(m_temp_output_path, m_gcode_preview_data, m_thumbnail_cb);
 
 	if (this->set_step_started(bspsGCodeFinalize)) {

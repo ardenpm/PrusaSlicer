@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <unordered_set>
 
 namespace Slic3r {
 namespace GUI {
@@ -20,7 +21,9 @@ enum class NotificationType
 	CustomNotification,
 	SlicingComplete,
 	//DeviceEjected,
-	ExportToRemovableFinished
+	ExportToRemovableFinished,
+	Mouse3dDisconnected,
+	Mouse3dConnected
 };
 class NotificationManager
 {
@@ -88,15 +91,15 @@ public:
 
 	
 	// only type means one of basic_notification (see below)
-	void push_notification(const NotificationType type, GLCanvas3D& canvas);
+	void push_notification(const NotificationType type, GLCanvas3D& canvas, int timestamp = 0);
 	// only text means Undefined type
-	void push_notification(const std::string& text, GLCanvas3D& canvas);
-	void push_notification(const std::string& text, NotificationLevel level, GLCanvas3D& canvas);
+	void push_notification(const std::string& text, GLCanvas3D& canvas, int timestamp = 0);
+	void push_notification(const std::string& text, NotificationLevel level, GLCanvas3D& canvas, int timestamp = 0);
 	// renders notifications in queue and deletes expired ones
 	void render_notifications(GLCanvas3D& canvas);
 	//pushes notification into the queue of notifications that are rendered
 	//can be used to create custom notification
-	void push_notification_data(const NotificationData& notification_data, GLCanvas3D& canvas);
+	void push_notification_data(const NotificationData& notification_data, GLCanvas3D& canvas, int timestamp);
 private:
 	void render_main_window(GLCanvas3D& canvas, float height);
 	//finds older notification of same type and moves it to the end of queue. returns true if found
@@ -108,10 +111,14 @@ private:
 	std::deque<PopNotification*> m_pop_notifications;
 	int m_next_id{ 1 };
 
+	std::unordered_set<int> m_used_timestamps;
+
 	//prepared notifications
 	const std::vector<NotificationData> basic_notifications = {
-		{NotificationType::SlicingComplete, NotificationLevel::RegularNotification, 5, "Slicing finished"/*, "clickable", "fisnisher" */},
+		{NotificationType::SlicingComplete, NotificationLevel::RegularNotification, 5, "Slicing finished."/*, "clickable", "fisnisher" */},
 		{NotificationType::ExportToRemovableFinished, NotificationLevel::ImportantNotification, 0, "Exporting finished.", "Eject drive." },
+		{NotificationType::Mouse3dDisconnected, NotificationLevel::RegularNotification, 10, "3d Mouse disconnected." },
+		{NotificationType::Mouse3dConnected, NotificationLevel::RegularNotification, 5, "3d Mouse connected." },
 		//{NotificationType::DeviceEjected, NotificationLevel::RegularNotification, 10, "Removable device has been safely ejected"} // if we want changeble text (like here name of device), we need to do it as CustomNotification
 		//{NotificationType::SlicingComplete, NotificationLevel::ImportantNotification, 10, Unmounting successful.The device% s(% s) can now be safely removed from the computer." }
 		//			Slic3r::GUI::show_info(this->q, format_wxstr(_L("Unmounting successful. The device %s(%s) can now be safely removed from the computer."),

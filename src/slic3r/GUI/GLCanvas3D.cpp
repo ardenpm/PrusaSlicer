@@ -2090,6 +2090,8 @@ void GLCanvas3D::render()
 
     std::string tooltip;
 
+	
+
 	// Negative coordinate means out of the window, likely because the window was deactivated.
 	// In that case the tooltip should be hidden.
     if (m_mouse.position.x() >= 0. && m_mouse.position.y() >= 0.) 
@@ -3431,6 +3433,7 @@ void GLCanvas3D::on_mouse(wxMouseEvent& evt)
 #ifdef SLIC3R_DEBUG_MOUSE_EVENTS
         printf((format_mouse_event_debug_message(evt) + " - Consumed by ImGUI\n").c_str());
 #endif /* SLIC3R_DEBUG_MOUSE_EVENTS */
+		 m_dirty = true;
         // do not return if dragging or tooltip not empty to allow for tooltip update
         if (!m_mouse.dragging && m_tooltip.is_empty())
             return;
@@ -3824,7 +3827,7 @@ void GLCanvas3D::on_mouse(wxMouseEvent& evt)
             m_gizmos.reset_all_states();
 
         // Only refresh if picking is enabled, in that case the objects may get highlighted if the mouse cursor hovers over.
-        if (m_picking_enabled)
+        //if (m_picking_enabled)
             m_dirty = true;
     }
     else

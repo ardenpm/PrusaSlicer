@@ -3450,9 +3450,10 @@ void Plater::priv::on_slicing_update(SlicingStatusEvent &evt)
     }
 }
 
-void Plater::priv::on_slicing_completed(wxCommandEvent &)
+void Plater::priv::on_slicing_completed(wxCommandEvent & evt)
 {
-	notification_manager->push_notification(NotificationType::SlicingComplete, *q->get_current_canvas3D());
+	BOOST_LOG_TRIVIAL(error) << "evt int " << evt.GetInt();
+	notification_manager->push_notification(NotificationType::SlicingComplete, *q->get_current_canvas3D(), evt.GetInt());
     switch (this->printer_technology) {
     case ptFFF:
         this->update_fff_scene();

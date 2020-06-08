@@ -15,6 +15,7 @@ using EjectDriveNotificationClickedEvent = SimpleEvent;
 wxDECLARE_EVENT(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, EjectDriveNotificationClickedEvent);
 
 class GLCanvas3D;
+class ImGuiWrapper;
 
 enum class NotificationType
 {
@@ -28,6 +29,7 @@ enum class NotificationType
 	NewAppAviable,
 	PresetUpdateAviable,
 	LoadingFailed,
+	ValidateError
 
 };
 class NotificationManager
@@ -46,7 +48,7 @@ public:
 		const int           duration;
 		const std::string   text1;
 		const std::string   hypertext = std::string();
-		const std::string   text2 = std::string();
+		const std::string   text2     = std::string();
 	};
 
 	//Pop notification - shows only once to user.
@@ -58,38 +60,74 @@ public:
 			Finished,
 			ClosePending,
 			Static,
-			Moving
+			Countdown,
+			Hovered
 		};
-		PopNotification(const NotificationData &n, const int id, wxEvtHandler* evt_handler);
-		//~PopNotificiation(){}
-		RenderResult render(GLCanvas3D& canvas, const float& initial_x);
+		 PopNotification(const NotificationData &n, const int id, wxEvtHandler* evt_handler);
+		~PopNotification();
+		RenderResult           render(GLCanvas3D& canvas, const float& initial_x, bool gray);
 		// close will dissapear notification on next render
-		void close() { m_close_pending = true; }
+		void                   close() { m_close_pending = true; }
 		// data from newer notification of same type
-		void update();
-		bool get_finished() const { return m_finished; }
+		void                   update(const NotificationData& n);
+		bool                   get_finished() const { return m_finished; }
 		// returns top after movement
-		float get_top() const { return m_target_x; }
+		float                  get_top() const { return m_top_x; }
 		//returns top in actual frame
-		float get_current_top() const { return m_current_x; }
-		NotificationType get_type() const { return m_data.type; }
-		
-	private:
-		void on_text_click();
+		float                  get_current_top() const { return m_top_x; }
+		const NotificationType get_type() const { return m_data.type; }
+		const NotificationData get_data() const { return m_data;  }
+		void                   substract_remaining_time() { m_remaining_time--; }
+	protected:
+		virtual void set_next_window_size(ImGuiWrapper& imgui);
+		virtual void render_text(ImGuiWrapper& imgui,
+			                     const float win_size_x, const float win_size_y,
+			                     const float win_pos_x , const float win_pos_y);
+		void         render_close_button(ImGuiWrapper& imgui,
+			                             const float win_size_x, const float win_size_y,
+			                             const float win_pos_x , const float win_pos_y);
+		void         render_countdown(ImGuiWrapper& imgui,
+			                          const float win_size_x, const float win_size_y,
+			                          const float win_pos_x , const float win_pos_y);
+		void         render_hypertext(ImGuiWrapper& imgui,
+			                          const float text_x, const float text_y,
+		                              const std::string text);
+		void         on_text_click();
+
 		const NotificationData m_data;
 
 		int           m_id;
-		long          m_creation_time;
-		bool          m_finished      { false }; // true - does not render, marked to delete
-		bool          m_close_pending { false }; // will go to m_finished next render
-		float         m_window_height { 0.0f };  
-		float         m_window_width  { 0.0f };
-		float         m_current_x     { 0.0f };  // x coord of top of window
-		float         m_target_x      { 0.0f };  // x coord where top of window is moving to
-		float         m_move_step     { 0.0f };  // movement in one render, calculated in first render
+		std::string   m_text1;
+		std::string   m_hypertext;
+		std::string   m_text2;
+		long          m_remaining_time;
+		bool          m_counting_down;
+		bool          m_finished        { false }; // true - does not render, marked to delete
+		bool          m_close_pending   { false }; // will go to m_finished next render
+		float         m_window_height   { 55.0f };  
+		float         m_window_width    { 450.0f };
+		float         m_top_x           { 0.0f };  // x coord where top of window is moving to
+		int           m_lines_count     { 1 };
 		wxEvtHandler* m_evt_handler;
 	};
 
+	class SlicingCompleteLargeNotification : public PopNotification
+	{
+	public:
+		SlicingCompleteLargeNotification(const NotificationData& n, const int id, wxEvtHandler* evt_handler, bool largeds);
+		void set_large(bool l);
+		bool get_large() { return m_is_large; }
+		void set_print_info(std::string info);
+	protected:
+		virtual void render_text(ImGuiWrapper& imgui,
+			                     const float win_size_x, const float win_size_y,
+			                     const float win_pos_x, const float win_pos_y) 
+			                     override;
+
+		bool        m_is_large;
+		bool        m_has_print_info { false };
+		std::string m_print_info { std::string() };
+	};
 
 	NotificationManager(wxEvtHandler* evt_handler);
 	~NotificationManager();
@@ -100,12 +138,22 @@ public:
 	// only text means Undefined type
 	void push_notification(const std::string& text, GLCanvas3D& canvas, int timestamp = 0);
 	void push_notification(const std::string& text, NotificationLevel level, GLCanvas3D& canvas, int timestamp = 0);
+	// creates ValidateError notification with custom text
+	void push_validate_error_notification(const std::string& text, GLCanvas3D& canvas);
+	// creates special notification slicing complete
+	// if large = true prints printing time and export button 
+	void push_slicing_complete_notification(GLCanvas3D& canvas, int timestamp, bool large);
+	void set_slicing_complete_print_time(std::string info);
+	void set_slicing_complete_large(bool large);
 	// renders notifications in queue and deletes expired ones
 	void render_notifications(GLCanvas3D& canvas);
+	
+	void set_validate_error_gray() { m_validate_error_gray = true; }
+private:
 	//pushes notification into the queue of notifications that are rendered
 	//can be used to create custom notification
-	void push_notification_data(const NotificationData& notification_data, GLCanvas3D& canvas, int timestamp);
-private:
+	bool push_notification_data(const NotificationData& notification_data, GLCanvas3D& canvas, int timestamp);
+	bool push_notification_data(NotificationManager::PopNotification* notification, GLCanvas3D& canvas, int timestamp);
 	void render_main_window(GLCanvas3D& canvas, float height);
 	//finds older notification of same type and moves it to the end of queue. returns true if found
 	bool find_older(NotificationType type);
@@ -116,15 +164,18 @@ private:
 	std::deque<PopNotification*> m_pop_notifications;
 	int m_next_id{ 1 };
 
+	long m_last_time { 0 };
+	bool m_validate_error_gray { false };
+
 	std::unordered_set<int> m_used_timestamps;
 
 	//prepared notifications
 	const std::vector<NotificationData> basic_notifications = {
-		{NotificationType::SlicingComplete, NotificationLevel::RegularNotification, 5, "Slicing finished."/*, "clickable", "fisnisher" */},
+		//{NotificationType::SlicingComplete, NotificationLevel::RegularNotification, 10, "Slicing finished."/*, "clickable", "fisnisher" */},
 		{NotificationType::SlicingNotPossible, NotificationLevel::RegularNotification, 10, "Slicing is not possible."},
 		{NotificationType::ExportToRemovableFinished, NotificationLevel::ImportantNotification, 0, "Exporting finished.", "Eject drive." },
-		{NotificationType::Mouse3dDisconnected, NotificationLevel::RegularNotification, 10, "3d Mouse disconnected." },
-		{NotificationType::Mouse3dConnected, NotificationLevel::RegularNotification, 5, "3d Mouse connected." },
+		{NotificationType::Mouse3dDisconnected, NotificationLevel::RegularNotification, 10, "3D Mouse disconnected." },
+		{NotificationType::Mouse3dConnected, NotificationLevel::RegularNotification, 5, "3D Mouse connected." },
 		{NotificationType::NewPresetsAviable, NotificationLevel::RegularNotification, 15, "New Presets are aviable.", "See here." },
 		{NotificationType::NewAppAviable, NotificationLevel::RegularNotification, 15, "New vesion of PrusaSlicer is aviable.", "Download." },
 		{NotificationType::PresetUpdateAviable, NotificationLevel::RegularNotification, 5, "Preset update is aviable.", "Update."},

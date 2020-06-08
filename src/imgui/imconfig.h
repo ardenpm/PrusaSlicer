@@ -115,6 +115,8 @@ namespace ImGui
     const char MaterialIconMarker   = 0x8;
 	const char CloseIconMarker      = 0xB;
 	const char CloseIconHoverMarker = 0xC;
+	const char TimerDotMarker       = 0xE;
+	const char TimerDotEmptyMarker  = 0xF;
 //    void MyFunction(const char* name, const MyMatrix44& v);
 
 }

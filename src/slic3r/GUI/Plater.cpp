@@ -1351,6 +1351,11 @@ void Sidebar::update_sliced_info_sizer()
                     new_label += format_wxstr("\n   - %1%", _L("normal mode"));
                     info_text += format_wxstr("\n%1%", ps.estimated_normal_print_time);
                     fill_labels(ps.estimated_normal_custom_gcode_print_times, new_label, info_text);
+
+					if (wxGetApp().plater()->is_sidebar_collapsed())
+						wxGetApp().plater()->get_notification_manager()->set_slicing_complete_large(true);
+					wxGetApp().plater()->get_notification_manager()->set_slicing_complete_print_time("Estimated printing time: " + ps.estimated_normal_print_time);
+
                 }
                 if (ps.estimated_silent_print_time != "N/A") {
                     new_label += format_wxstr("\n   - %1%", _L("stealth mode"));
@@ -2861,8 +2866,10 @@ unsigned int Plater::priv::update_background_process(bool force_validation, bool
             if (invalidated != Print::APPLY_STATUS_UNCHANGED && this->background_processing_enabled())
                 return_state |= UPDATE_BACKGROUND_PROCESS_RESTART;
         } else {
+			notification_manager->push_validate_error_notification(err, *q->get_current_canvas3D());
             // The print is not valid.
             // Only show the error message immediately, if the top level parent of this window is active.
+			/*
             auto p = dynamic_cast<wxWindow*>(this->q);
             while (p->GetParent())
                 p = p->GetParent();
@@ -2874,6 +2881,7 @@ unsigned int Plater::priv::update_background_process(bool force_validation, bool
                 // Show the error message once the main window gets activated.
                 this->delayed_error_message = err;
             }
+			*/
             return_state |= UPDATE_BACKGROUND_PROCESS_INVALID;
         }
     } else if (! this->delayed_error_message.empty()) {
@@ -3452,8 +3460,8 @@ void Plater::priv::on_slicing_update(SlicingStatusEvent &evt)
 
 void Plater::priv::on_slicing_completed(wxCommandEvent & evt)
 {
-	BOOST_LOG_TRIVIAL(error) << "evt int " << evt.GetInt();
-	notification_manager->push_notification(NotificationType::SlicingComplete, *q->get_current_canvas3D(), evt.GetInt());
+	//notification_manager->push_notification(NotificationType::SlicingComplete, *q->get_current_canvas3D(), evt.GetInt());
+	notification_manager->push_slicing_complete_notification(*q->get_current_canvas3D(), evt.GetInt(), is_sidebar_collapsed());
     switch (this->printer_technology) {
     case ptFFF:
         this->update_fff_scene();

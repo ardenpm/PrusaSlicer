@@ -23,6 +23,7 @@ namespace Slic3r {
 namespace GUI {
 
 wxDEFINE_EVENT(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, EjectDriveNotificationClickedEvent);
+wxDEFINE_EVENT(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, ExportGcodeNotificationClickedEvent);
 
 //ScalableBitmap bmp_icon;
 //------PopNotification--------
@@ -51,29 +52,10 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	bool            new_target = false;
 	bool            shown = true;
 	std::string     name;
-
-	//movent
-	/*
-	if (m_top_x != initial_x + m_window_height)
-	{
-		m_top_x = initial_x + m_window_height;
-		new_target = true;
-	}
-	if (m_current_x < m_top_x) {
-		if (new_target || m_move_step < 1.0f)
-			m_move_step = std::min((m_top_x - m_current_x) / 20, NOTIFICATION_MAX_MOVE);
-		m_current_x += m_move_step;
-		ret_val = RenderResult::Moving;
-	}
-	if (m_current_x > m_top_x)
-		m_current_x = m_top_x;
-		*/
 	
 	//background color
 	if (gray)
 	{
-		//ImVec4 backcolor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-	    //backcolor.w = 0.5f;
 		ImVec4 backcolor(0.7f, 0.7f, 0.7f, 0.5f);
 	    ImGui::PushStyleColor(ImGuiCol_WindowBg, backcolor);
 	}
@@ -89,7 +71,7 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	//BOOST_LOG_TRIVIAL(error) << mouse_pos.x << "," << mouse_pos.y;
 
 	//find if hovered
-	if (mouse_pos.x < win_pos.x && mouse_pos.x > win_pos.x - 450 && mouse_pos.y > win_pos.y&& mouse_pos.y < win_pos.y + m_window_height)
+	if (mouse_pos.x < win_pos.x && mouse_pos.x > win_pos.x - m_window_width && mouse_pos.y > win_pos.y&& mouse_pos.y < win_pos.y + m_window_height)
 	{
 		//BOOST_LOG_TRIVIAL(error) << "mouse";
 		ImGui::SetNextWindowFocus();
@@ -164,7 +146,7 @@ void NotificationManager::PopNotification::set_next_window_size(ImGuiWrapper& im
 	ImVec2 text1_size = ImGui::CalcTextSize(m_text1.c_str());
 	if (text1_size.x > m_window_width - 100)
 		m_lines_count = 2;
-	m_window_height = 20 + m_lines_count * 35;
+	//m_window_height = 35 + m_lines_count * 20;
 	imgui.set_next_window_size(m_window_width, m_window_height, ImGuiCond_Always);
 }
 
@@ -392,6 +374,11 @@ void NotificationManager::PopNotification::on_text_click()
 		if (m_evt_handler != nullptr)
 			wxPostEvent(m_evt_handler, EjectDriveNotificationClickedEvent(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED));
 		break;
+	case NotificationType::SlicingComplete :
+		//wxGetApp().plater()->export_gcode(false);
+		assert(m_evt_handler != nullptr);
+		if (m_evt_handler != nullptr)
+			wxPostEvent(m_evt_handler, ExportGcodeNotificationClickedEvent(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED));
 	default:
 		break;
 	}
@@ -445,7 +432,8 @@ void NotificationManager::SlicingCompleteLargeNotification::set_print_info(std::
 {
 	m_print_info = info;
 	m_has_print_info = true;
-	m_window_height = 90;
+	if(m_is_large)
+		m_lines_count = 2;
 }
 void NotificationManager::SlicingCompleteLargeNotification::set_large(bool l)
 {

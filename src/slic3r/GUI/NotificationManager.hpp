@@ -13,6 +13,8 @@ namespace GUI {
 
 using EjectDriveNotificationClickedEvent = SimpleEvent;
 wxDECLARE_EVENT(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, EjectDriveNotificationClickedEvent);
+using ExportGcodeNotificationClickedEvent = SimpleEvent;
+wxDECLARE_EVENT(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, ExportGcodeNotificationClickedEvent);
 
 class GLCanvas3D;
 class ImGuiWrapper;

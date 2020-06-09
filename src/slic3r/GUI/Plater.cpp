@@ -1352,9 +1352,9 @@ void Sidebar::update_sliced_info_sizer()
                     info_text += format_wxstr("\n%1%", ps.estimated_normal_print_time);
                     fill_labels(ps.estimated_normal_custom_gcode_print_times, new_label, info_text);
 
-					if (wxGetApp().plater()->is_sidebar_collapsed())
-						wxGetApp().plater()->get_notification_manager()->set_slicing_complete_large(true);
-					wxGetApp().plater()->get_notification_manager()->set_slicing_complete_print_time("Estimated printing time: " + ps.estimated_normal_print_time);
+					if (p->plater->is_sidebar_collapsed())
+						p->plater->get_notification_manager()->set_slicing_complete_large(true);
+					p->plater->get_notification_manager()->set_slicing_complete_print_time("Estimated printing time: " + ps.estimated_normal_print_time);
 
                 }
                 if (ps.estimated_silent_print_time != "N/A") {
@@ -2049,6 +2049,7 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
 	notification_manager = new NotificationManager(this->q);
     
 	this->q->Bind(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, [this](EjectDriveNotificationClickedEvent&) { this->q->eject_drive(); });
+	this->q->Bind(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, [this](EjectDriveNotificationClickedEvent&) { this->q->export_gcode(false); });
 
 	this->q->Bind(EVT_REMOVABLE_DRIVE_EJECTED, [this, q](RemovableDriveEjectEvent &evt) {
 		if (evt.data.second) {

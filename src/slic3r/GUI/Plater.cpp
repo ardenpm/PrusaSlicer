@@ -2864,10 +2864,11 @@ unsigned int Plater::priv::update_background_process(bool force_validation, bool
 		// The state of the Print changed, and it is non-zero. Let's validate it and give the user feedback on errors.
         std::string err = this->background_process.validate();
         if (err.empty()) {
+			notification_manager->set_error_gray(true);
             if (invalidated != Print::APPLY_STATUS_UNCHANGED && this->background_processing_enabled())
                 return_state |= UPDATE_BACKGROUND_PROCESS_RESTART;
         } else {
-			notification_manager->push_validate_error_notification(err, *q->get_current_canvas3D());
+			notification_manager->push_error_notification(err, *q->get_current_canvas3D());
             // The print is not valid.
             // Only show the error message immediately, if the top level parent of this window is active.
 			/*
@@ -3498,12 +3499,13 @@ void Plater::priv::on_process_completed(wxCommandEvent &evt)
         wxString message = evt.GetString();
         if (message.IsEmpty())
             message = _L("Export failed");
-        if (q->m_tracking_popup_menu)
-        	// We don't want to pop-up a message box when tracking a pop-up menu.
-        	// We postpone the error message instead.
-            q->m_tracking_popup_menu_error_message = message;
-        else
-	        show_error(q, message);
+		if (q->m_tracking_popup_menu)
+			// We don't want to pop-up a message box when tracking a pop-up menu.
+			// We postpone the error message instead.
+			q->m_tracking_popup_menu_error_message = message;
+		else
+			notification_manager->push_error_notification(boost::nowide::narrow(message), *q->get_current_canvas3D());
+	        //show_error(q, message);
         this->statusbar()->set_status_text(message);
     }
     if (canceled)

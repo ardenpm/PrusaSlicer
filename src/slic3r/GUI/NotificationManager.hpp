@@ -31,7 +31,9 @@ enum class NotificationType
 	NewAppAviable,
 	PresetUpdateAviable,
 	LoadingFailed,
-	ValidateError
+	ValidateError, // currently not used - instead Slicing error is used for both slicing and validate errors
+	SlicingError,
+	ApplyError
 
 };
 class NotificationManager
@@ -67,7 +69,7 @@ public:
 		};
 		 PopNotification(const NotificationData &n, const int id, wxEvtHandler* evt_handler);
 		~PopNotification();
-		RenderResult           render(GLCanvas3D& canvas, const float& initial_x, bool gray);
+		RenderResult           render(GLCanvas3D& canvas, const float& initial_x);
 		// close will dissapear notification on next render
 		void                   close() { m_close_pending = true; }
 		// data from newer notification of same type
@@ -80,6 +82,7 @@ public:
 		const NotificationType get_type() const { return m_data.type; }
 		const NotificationData get_data() const { return m_data;  }
 		void                   substract_remaining_time() { m_remaining_time--; }
+		void                   set_gray(bool g) { m_is_gray = g; }
 	protected:
 		virtual void set_next_window_size(ImGuiWrapper& imgui);
 		virtual void render_text(ImGuiWrapper& imgui,
@@ -110,6 +113,7 @@ public:
 		float         m_window_width    { 450.0f };
 		float         m_top_x           { 0.0f };  // x coord where top of window is moving to
 		int           m_lines_count     { 1 };
+		bool          m_is_gray         { false };
 		wxEvtHandler* m_evt_handler;
 	};
 
@@ -140,8 +144,10 @@ public:
 	// only text means Undefined type
 	void push_notification(const std::string& text, GLCanvas3D& canvas, int timestamp = 0);
 	void push_notification(const std::string& text, NotificationLevel level, GLCanvas3D& canvas, int timestamp = 0);
-	// creates ValidateError notification with custom text
-	void push_validate_error_notification(const std::string& text, GLCanvas3D& canvas);
+	// creates Slicing Error notification with custom text
+	void push_error_notification(const std::string& text, GLCanvas3D& canvas);
+	//void push_error_notification(const std::string& text, GLCanvas3D& canvas);
+	//void push_slicing_error_notification(const std::string& text, GLCanvas3D& canvas);
 	// creates special notification slicing complete
 	// if large = true prints printing time and export button 
 	void push_slicing_complete_notification(GLCanvas3D& canvas, int timestamp, bool large);
@@ -149,8 +155,9 @@ public:
 	void set_slicing_complete_large(bool large);
 	// renders notifications in queue and deletes expired ones
 	void render_notifications(GLCanvas3D& canvas);
-	
-	void set_validate_error_gray() { m_validate_error_gray = true; }
+	//  marks errors as gray
+	void set_error_gray(bool g);
+	void clear_slicing_error();
 private:
 	//pushes notification into the queue of notifications that are rendered
 	//can be used to create custom notification
@@ -161,15 +168,12 @@ private:
 	bool find_older(NotificationType type);
 	void print_to_console() const;
 
-	wxEvtHandler* m_evt_handler;
-
+	wxEvtHandler*                m_evt_handler;
 	std::deque<PopNotification*> m_pop_notifications;
-	int m_next_id{ 1 };
-
-	long m_last_time { 0 };
-	bool m_validate_error_gray { false };
-
-	std::unordered_set<int> m_used_timestamps;
+	int                          m_next_id { 1 };
+	long                         m_last_time { 0 };
+	//timestamps used for slining finished - notification could be gone so it needs to be stored here
+	std::unordered_set<int>      m_used_timestamps;
 
 	//prepared notifications
 	const std::vector<NotificationData> basic_notifications = {

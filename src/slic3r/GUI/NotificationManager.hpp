@@ -33,6 +33,7 @@ enum class NotificationType
 	LoadingFailed,
 	ValidateError, // currently not used - instead Slicing error is used for both slicing and validate errors
 	SlicingError,
+	SlicingWarning,
 	ApplyError
 
 };
@@ -43,6 +44,7 @@ public:
 	{
 		RegularNotification,
 		ErrorNotification,
+		WarningNotification,
 		ImportantNotification
 	};
 	// duration 0 means not disapearing
@@ -96,7 +98,8 @@ public:
 			                          const float win_pos_x , const float win_pos_y);
 		void         render_hypertext(ImGuiWrapper& imgui,
 			                          const float text_x, const float text_y,
-		                              const std::string text);
+		                              const std::string text,
+		                              bool more = false);
 		void         on_text_click();
 
 		const NotificationData m_data;
@@ -107,13 +110,17 @@ public:
 		std::string   m_text2;
 		long          m_remaining_time;
 		bool          m_counting_down;
-		bool          m_finished        { false }; // true - does not render, marked to delete
-		bool          m_close_pending   { false }; // will go to m_finished next render
-		float         m_window_height   { 55.0f };  
-		float         m_window_width    { 450.0f };
-		float         m_top_x           { 0.0f };  // x coord where top of window is moving to
-		int           m_lines_count     { 1 };
-		bool          m_is_gray         { false };
+		bool          m_finished           { false }; // true - does not render, marked to delete
+		bool          m_close_pending      { false }; // will go to m_finished next render
+		const float   m_window_height_base = 55.0f;
+		const float   m_window_width_base  = 450.0f;
+		float         m_window_height      { 55.0f };  
+		float         m_window_width       { 450.0f };
+		float         m_top_x              { 0.0f };  // x coord where top of window is moving to
+		int           m_lines_count        { 1 };
+		bool          m_is_gray            { false };
+		//if multiline = true, notification is showing all lines(>2)
+		bool          m_multiline         { false };
 		wxEvtHandler* m_evt_handler;
 	};
 
@@ -123,6 +130,7 @@ public:
 		SlicingCompleteLargeNotification(const NotificationData& n, const int id, wxEvtHandler* evt_handler, bool largeds);
 		void set_large(bool l);
 		bool get_large() { return m_is_large; }
+
 		void set_print_info(std::string info);
 	protected:
 		virtual void render_text(ImGuiWrapper& imgui,
@@ -146,6 +154,8 @@ public:
 	void push_notification(const std::string& text, NotificationLevel level, GLCanvas3D& canvas, int timestamp = 0);
 	// creates Slicing Error notification with custom text
 	void push_error_notification(const std::string& text, GLCanvas3D& canvas);
+	// creates Slicing Warning notification with custom text
+	void push_warning_notification(const std::string& text, GLCanvas3D& canvas);
 	//void push_error_notification(const std::string& text, GLCanvas3D& canvas);
 	//void push_slicing_error_notification(const std::string& text, GLCanvas3D& canvas);
 	// creates special notification slicing complete
@@ -155,9 +165,10 @@ public:
 	void set_slicing_complete_large(bool large);
 	// renders notifications in queue and deletes expired ones
 	void render_notifications(GLCanvas3D& canvas);
-	//  marks errors as gray
+	//  marks slicing errors and warings as gray
 	void set_error_gray(bool g);
-	void clear_slicing_error();
+	// imidietly stops showing slicing errors
+	void clear_error();
 private:
 	//pushes notification into the queue of notifications that are rendered
 	//can be used to create custom notification

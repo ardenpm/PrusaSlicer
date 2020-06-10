@@ -125,8 +125,13 @@ void NotificationManager::PopNotification::set_next_window_size(ImGuiWrapper& im
 {
 	//set_next_window_size should be calculated with respect to size of all notifications and text
 	ImVec2 text1_size = ImGui::CalcTextSize(m_text1.c_str());
-	if (text1_size.x > m_window_width - 100)
-		m_lines_count = 2;
+	
+	m_lines_count = text1_size.x / (m_window_width - 100) + 1;
+	if (m_multiline) {
+		m_window_height = m_window_height_base + m_lines_count * 11;
+	}
+	//if (text1_size.x > m_window_width - 100)
+	//	m_lines_count = 2;
 	//m_window_height = 35 + m_lines_count * 20;
 	imgui.set_next_window_size(m_window_width, m_window_height, ImGuiCond_Always);
 }
@@ -144,56 +149,94 @@ void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, cons
 	std::string fulltext = m_text1 + m_hypertext + m_text2;
 	ImVec2 text_size = ImGui::CalcTextSize(fulltext.c_str());
 	float cursor_y = win_size.y / 2 - text_size.y / 2;
-	if (text1_size.x > 350) { // split in half
+
+	if (m_lines_count > 2) {
+		if (m_multiline) {
+			int last_end = 0;
+			x_offset = 20;
+			float starting_y =  text_size.y/2;
+			float shift_y = text_size.y;
+			for (size_t i = 0; i < m_lines_count; i++) {
+				int end_of_line = m_text1.find_first_of(' ', last_end + m_text1.length() / m_lines_count - 1);
+			    std::string line = m_text1.substr(last_end, end_of_line - last_end);
+				last_end = end_of_line;
+				text1_size = ImGui::CalcTextSize(line.c_str());
+				ImGui::SetCursorPosX(win_size.x / 2 - text1_size.x / 2 - x_offset);
+				ImGui::SetCursorPosY(starting_y + i * shift_y);
+				imgui.text(line.c_str());
+			}
+
+		} else {
+			x_offset = 20;
+			cursor_y = win_size.y / 2 - win_size.y / 6 - text_size.y / 2;
+			int end_of_line = m_text1.find_first_of(' ', m_text1.length() / m_lines_count - 1);
+			std::string first_half_text1 = m_text1.substr(0, end_of_line);
+			int end_of_line_2 = m_text1.find_first_of(' ', end_of_line * 2 - 5);
+			std::string second_half_text1 = m_text1.substr(end_of_line + 1, end_of_line_2 - end_of_line - 1);
+			ImVec2 first_half_text1_size = ImGui::CalcTextSize(first_half_text1.c_str());
+			ImGui::SetCursorPosX(win_size.x / 2 - first_half_text1_size.x / 2 - x_offset);
+			ImGui::SetCursorPosY(cursor_y);
+			imgui.text(first_half_text1.c_str());
+			//second half
+			second_half_text1 += "..";
+			cursor_y = win_size.y / 2 + win_size.y / 6 - text_size.y / 2;
+			text_size = ImGui::CalcTextSize((second_half_text1).c_str());
+			ImVec2 button_size = ImGui::CalcTextSize("More");
+			ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 - x_offset - button_size.x / 2);
+			ImGui::SetCursorPosY(cursor_y);
+			imgui.text(second_half_text1.c_str());
+			render_hypertext(imgui, win_size.x / 2 + text_size.x / 2 - x_offset - button_size.x / 2, cursor_y, "More", true);
+		}
+	} else {
+		//text 1
+		if (text1_size.x > 350) { // split in half
 		//first half
-		x_offset = 20;
-		cursor_y = win_size.y / 2 - win_size.y / 6 - text_size.y / 2;
-		int half = m_text1.find_first_of(' ', m_text1.length() / 2 - 1);
-		std::string first_half_text1 = m_text1.substr(0, half);
-		std::string second_half_text1 = m_text1.substr(half);
-		ImVec2 first_half_text1_size = ImGui::CalcTextSize(first_half_text1.c_str());
-		ImGui::SetCursorPosX(win_size.x / 2 - first_half_text1_size.x / 2 - x_offset);
-		ImGui::SetCursorPosY(cursor_y);
-		imgui.text(first_half_text1.c_str());
-		//second half
-		cursor_y = win_size.y / 2 + win_size.y / 6 - text_size.y / 2;
-		fulltext = second_half_text1 + m_hypertext + m_text2;
-		text_size = ImGui::CalcTextSize(fulltext.c_str());
-		ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 - x_offset);
-		ImGui::SetCursorPosY(cursor_y);
-		imgui.text(second_half_text1.c_str());
+			x_offset = 20;
+			cursor_y = win_size.y / 2 - win_size.y / 6 - text_size.y / 2;
+			int half = m_text1.find_first_of(' ', m_text1.length() / 2 - 1);
+			std::string first_half_text1 = m_text1.substr(0, half);
+			std::string second_half_text1 = m_text1.substr(half);
+			ImVec2 first_half_text1_size = ImGui::CalcTextSize(first_half_text1.c_str());
+			ImGui::SetCursorPosX(win_size.x / 2 - first_half_text1_size.x / 2 - x_offset);
+			ImGui::SetCursorPosY(cursor_y);
+			imgui.text(first_half_text1.c_str());
+			//second half
+			cursor_y = win_size.y / 2 + win_size.y / 6 - text_size.y / 2;
+			fulltext = second_half_text1 + m_hypertext + m_text2;
+			text_size = ImGui::CalcTextSize(fulltext.c_str());
+			ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 - x_offset);
+			ImGui::SetCursorPosY(cursor_y);
+			imgui.text(second_half_text1.c_str());
+		}
+		else {
+			ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 - x_offset);
+			ImGui::SetCursorPosY(cursor_y);
+			imgui.text(m_text1.c_str());
+		}
+
+		//notification hyperlink text
+		if (!m_hypertext.empty())
+		{
+			ImVec2 prev_size = ImGui::CalcTextSize(m_text1.c_str());
+			render_hypertext(imgui, win_size.x / 2 - text_size.x / 2 + prev_size.x + 4 - x_offset, cursor_y, m_hypertext);
+		}
+
+		//notification text 2
+		if (!m_text2.empty())
+		{
+			ImVec2 part_size = ImGui::CalcTextSize(m_hypertext.c_str());
+			ImGui::SetCursorPosX(win_size.x / 2 + text_size.x / 2 - part_size.x + 8 - x_offset);
+			ImGui::SetCursorPosY(cursor_y);
+			imgui.text(m_text2.c_str());
+		}
 	}
-	else {
-		ImGui::SetCursorPosX(win_size.x / 2 - text_size.x / 2 - x_offset);
-		ImGui::SetCursorPosY(cursor_y);
-		imgui.text(m_text1.c_str());
-	}
-	//ImGui::PopStyleColor();
 
 
-
-	//notification hyperlink text
-	if (!m_hypertext.empty())
-	{
-		ImVec2 prev_size = ImGui::CalcTextSize(m_text1.c_str());
-		render_hypertext(imgui, win_size.x / 2 - text_size.x / 2 + prev_size.x + 4 - x_offset, cursor_y, m_hypertext);
-	}
-
-	//notification text 2
-	if (!m_text2.empty())
-	{
-		//ImGui::PushStyleColor(ImGuiCol_Text, regular_text_color);
-		ImVec2 part_size = ImGui::CalcTextSize(m_hypertext.c_str());
-		ImGui::SetCursorPosX(win_size.x / 2 + text_size.x / 2 - part_size.x + 8 - x_offset);
-		ImGui::SetCursorPosY(cursor_y);
-
-		imgui.text(m_text2.c_str());
-		//ImGui::PopStyleColor();
-	}
+	
 	
 }
 
-void NotificationManager::PopNotification::render_hypertext(ImGuiWrapper& imgui, const float text_x, const float text_y, const std::string text)
+void NotificationManager::PopNotification::render_hypertext(ImGuiWrapper& imgui, const float text_x, const float text_y, const std::string text, bool more)
 {
 	//invisible button
 	ImVec2 part_size = ImGui::CalcTextSize(text.c_str());
@@ -204,8 +247,15 @@ void NotificationManager::PopNotification::render_hypertext(ImGuiWrapper& imgui,
 	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.0f, .0f, .0f, .0f));
 	if (imgui.button("", part_size.x + 6, part_size.y + 10))
 	{
-		on_text_click();
-		m_close_pending = true;
+		if (more)
+		{
+			m_multiline = true;
+			set_next_window_size(imgui);
+		}
+		else {
+			on_text_click();
+			m_close_pending = true;
+		}
 	}
 	ImGui::PopStyleColor();
 	ImGui::PopStyleColor();
@@ -220,7 +270,7 @@ void NotificationManager::PopNotification::render_hypertext(ImGuiWrapper& imgui,
 	ImGui::PushStyleColor(ImGuiCol_Text, orange_color);
 	ImGui::SetCursorPosX(text_x);
 	ImGui::SetCursorPosY(text_y);
-	imgui.text(m_hypertext.c_str());
+	imgui.text(text.c_str());
 	ImGui::PopStyleColor();
 
 	//underline
@@ -417,16 +467,28 @@ void NotificationManager::push_error_notification(const std::string& text, GLCan
 	set_error_gray(false);
 	push_notification_data({ NotificationType::SlicingError, NotificationLevel::ErrorNotification, 0, "ERROR: " + text }, canvas, 0);
 }
+void NotificationManager::push_warning_notification(const std::string& text, GLCanvas3D& canvas)
+{
+	//set_error_gray(false);
+	push_notification_data({ NotificationType::SlicingWarning, NotificationLevel::WarningNotification, 0, "WARNING: " + text }, canvas, 0);
+}
 
 void NotificationManager::set_error_gray(bool g)
 {
 	for (PopNotification* notification : m_pop_notifications) {
-		if (notification->get_type() == NotificationType::SlicingError) {
+		if (notification->get_type() == NotificationType::SlicingError || notification->get_type() == NotificationType::SlicingWarning) {
 			notification->set_gray(g);
 		}
 	}
 }
-
+void NotificationManager::clear_error()
+{
+	for (PopNotification* notification : m_pop_notifications) {
+		if (notification->get_type() == NotificationType::SlicingError || notification->get_type() == NotificationType::SlicingWarning) {
+			notification->close();
+		}
+	}
+}
 void NotificationManager::push_slicing_complete_notification(GLCanvas3D& canvas, int timestamp, bool large)
 {
 	std::string hypertext;
@@ -462,14 +524,7 @@ void NotificationManager::set_slicing_complete_large(bool large)
 		}
 	}
 }
-void NotificationManager::clear_slicing_error()
-{
-	for (PopNotification* notification : m_pop_notifications) {
-		if (notification->get_type() == NotificationType::SlicingError) {
-			notification->close();
-		}
-	}
-}
+
 bool NotificationManager::push_notification_data(const NotificationData &notification_data,  GLCanvas3D& canvas, int timestamp)
 {
 	if(timestamp != 0)

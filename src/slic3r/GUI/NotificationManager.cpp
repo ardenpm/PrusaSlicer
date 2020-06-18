@@ -38,6 +38,7 @@ NotificationManager::PopNotification::PopNotification(const NotificationData &n,
     , m_text2          (n.text2)
 	, m_evt_handler    (evt_handler)
 {
+	count_lines();
 }
 NotificationManager::PopNotification::~PopNotification()
 {
@@ -121,52 +122,51 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	imgui.end();
 	return ret_val;
 }
-
-void NotificationManager::PopNotification::set_next_window_size(ImGuiWrapper& imgui)
+void NotificationManager::PopNotification::count_lines()
 {
-	//set_next_window_size should be calculated with respect to size of all notifications and text
-	ImVec2 text1_size = ImGui::CalcTextSize(m_text1.c_str());
-	//
+	std::string text = m_text1 + " " + m_hypertext;
 	int last_end = 0;
 	m_lines_count = 0;
 	m_endlines.clear();
-	while (last_end < m_text1.length() - 1)
+	while (last_end < text.length() - 1)
 	{
-		int next_hard_end = m_text1.find_first_of('\n', last_end);
-		if(next_hard_end > 0 && ImGui::CalcTextSize(m_text1.substr(last_end, next_hard_end - last_end).c_str()).x < m_window_width - m_window_width_offset) {
+		int next_hard_end = text.find_first_of('\n', last_end);
+		if (next_hard_end > 0 && ImGui::CalcTextSize(text.substr(last_end, next_hard_end - last_end).c_str()).x < m_window_width - m_window_width_offset) {
 			//next line is ended by '/n'
 			m_endlines.push_back(next_hard_end);
 			last_end = next_hard_end + 1;
-		} else {
+		}
+		else {
 			// find next suitable endline
-			if (ImGui::CalcTextSize(m_text1.substr(last_end).c_str()).x >= m_window_width - m_window_width_offset) {
+			if (ImGui::CalcTextSize(text.substr(last_end).c_str()).x >= m_window_width - m_window_width_offset) {
 				// more than one line till end
-				int next_space = m_text1.find_first_of(' ', last_end);
+				int next_space = text.find_first_of(' ', last_end);
 				if (next_space > 0) {
-					int next_space_candidate = m_text1.find_first_of(' ', next_space + 1);
-					while (next_space_candidate > 0 && ImGui::CalcTextSize(m_text1.substr(last_end, next_space_candidate - last_end).c_str()).x < m_window_width - m_window_width_offset) {
+					int next_space_candidate = text.find_first_of(' ', next_space + 1);
+					while (next_space_candidate > 0 && ImGui::CalcTextSize(text.substr(last_end, next_space_candidate - last_end).c_str()).x < m_window_width - m_window_width_offset) {
 						next_space = next_space_candidate;
-						next_space_candidate = m_text1.find_first_of(' ', next_space + 1);
+						next_space_candidate = text.find_first_of(' ', next_space + 1);
 					}
 					m_endlines.push_back(next_space);
 					last_end = next_space + 1;
 				}
-			} else {
-				m_endlines.push_back(m_text1.length());
-				last_end = m_text1.length();
 			}
-			
+			else {
+				m_endlines.push_back(text.length());
+				last_end = text.length();
+			}
+
 		}
 		m_lines_count++;
 	}
+}
+void NotificationManager::PopNotification::set_next_window_size(ImGuiWrapper& imgui)
+{
 	//m_lines_count = text1_size.x / (m_window_width - m_window_width_offset) + 1;
 	//m_lines_count += m_hard_newlines;
 	if (m_multiline) {
 		m_window_height = m_window_height_base + m_lines_count * 19;//11;
 	}
-	//if (text1_size.x > m_window_width - 100)
-	//	m_lines_count = 2;
-	//m_window_height = 35 + m_lines_count * 20;
 	imgui.set_next_window_size(m_window_width, m_window_height, ImGuiCond_Always);
 }
 
@@ -399,6 +399,7 @@ void NotificationManager::PopNotification::update(const NotificationData& n)
 	m_text1          = n.text1;
 	m_hypertext      = n.hypertext;
     m_text2          = n.text2;
+	count_lines();
 }
 //SlicingCompleteLargeNotification
 NotificationManager::SlicingCompleteLargeNotification::SlicingCompleteLargeNotification(const NotificationData& n, const int id, wxEvtHandler* evt_handler, bool large) :

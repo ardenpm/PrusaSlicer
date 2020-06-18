@@ -87,6 +87,7 @@ public:
 		void                   set_gray(bool g) { m_is_gray = g; }
 		void                   set_hard_newlines_count(int count) { m_hard_newlines = count; }
 	protected:
+		void                   count_lines();
 		virtual void set_next_window_size(ImGuiWrapper& imgui);
 		virtual void render_text(ImGuiWrapper& imgui,
 			                     const float win_size_x, const float win_size_y,

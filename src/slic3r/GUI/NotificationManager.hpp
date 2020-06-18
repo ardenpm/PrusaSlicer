@@ -85,6 +85,7 @@ public:
 		const NotificationData get_data() const { return m_data;  }
 		void                   substract_remaining_time() { m_remaining_time--; }
 		void                   set_gray(bool g) { m_is_gray = g; }
+		void                   set_hard_newlines_count(int count) { m_hard_newlines = count; }
 	protected:
 		virtual void set_next_window_size(ImGuiWrapper& imgui);
 		virtual void render_text(ImGuiWrapper& imgui,
@@ -104,24 +105,27 @@ public:
 
 		const NotificationData m_data;
 
-		int           m_id;
-		std::string   m_text1;
-		std::string   m_hypertext;
-		std::string   m_text2;
-		long          m_remaining_time;
-		bool          m_counting_down;
-		bool          m_finished           { false }; // true - does not render, marked to delete
-		bool          m_close_pending      { false }; // will go to m_finished next render
-		const float   m_window_height_base = 55.0f;
-		const float   m_window_width_base  = 450.0f;
-		float         m_window_height      { 55.0f };  
-		float         m_window_width       { 450.0f };
-		float         m_top_x              { 0.0f };  // x coord where top of window is moving to
-		int           m_lines_count        { 1 };
-		bool          m_is_gray            { false };
+		int              m_id;
+		std::string      m_text1;
+		std::string      m_hypertext;
+		std::string      m_text2;
+		long             m_remaining_time;
+		bool             m_counting_down;
+		bool             m_finished             { false }; // true - does not render, marked to delete
+		bool             m_close_pending        { false }; // will go to m_finished next render
+		const float      m_window_height_base   = 56.0f;
+		const float      m_window_width_base    = 450.0f;
+		const float      m_window_width_offset  = 70.0f;
+		float            m_window_height        { 56.0f };  
+		float            m_window_width         { 450.0f };
+		float            m_top_x                { 0.0f };  // x coord where top of window is moving to
+		int              m_hard_newlines        { 0 };
+		int              m_lines_count          { 1 };
+		std::vector<int> m_endlines;
+		bool             m_is_gray              { false };
 		//if multiline = true, notification is showing all lines(>2)
-		bool          m_multiline         { false };
-		wxEvtHandler* m_evt_handler;
+		bool             m_multiline            { false };
+		wxEvtHandler*    m_evt_handler;
 	};
 
 	class SlicingCompleteLargeNotification : public PopNotification

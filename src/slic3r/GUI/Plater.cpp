@@ -2868,7 +2868,7 @@ unsigned int Plater::priv::update_background_process(bool force_validation, bool
             if (invalidated != Print::APPLY_STATUS_UNCHANGED && this->background_processing_enabled())
                 return_state |= UPDATE_BACKGROUND_PROCESS_RESTART;
         } else {
-			notification_manager->push_error_notification(err, *q->get_current_canvas3D());
+			notification_manager->push_error_notification(err, *q->get_current_canvas3D());//former validate error notification
             // The print is not valid.
             // Only show the error message immediately, if the top level parent of this window is active.
 			/*

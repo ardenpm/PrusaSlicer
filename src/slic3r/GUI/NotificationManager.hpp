@@ -15,6 +15,8 @@ using EjectDriveNotificationClickedEvent = SimpleEvent;
 wxDECLARE_EVENT(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, EjectDriveNotificationClickedEvent);
 using ExportGcodeNotificationClickedEvent = SimpleEvent;
 wxDECLARE_EVENT(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, ExportGcodeNotificationClickedEvent);
+using PresetUpdateAviableClickedEvent = SimpleEvent;
+wxDECLARE_EVENT(EVT_PRESET_UPDATE_AVIABLE_CLICKED, PresetUpdateAviableClickedEvent);
 
 class GLCanvas3D;
 class ImGuiWrapper;
@@ -85,7 +87,6 @@ public:
 		const NotificationData get_data() const { return m_data;  }
 		void                   substract_remaining_time() { m_remaining_time--; }
 		void                   set_gray(bool g) { m_is_gray = g; }
-		void                   set_hard_newlines_count(int count) { m_hard_newlines = count; }
 	protected:
 		void                   count_lines();
 		virtual void set_next_window_size(ImGuiWrapper& imgui);
@@ -120,7 +121,6 @@ public:
 		float            m_window_height        { 56.0f };  
 		float            m_window_width         { 450.0f };
 		float            m_top_x                { 0.0f };  // x coord where top of window is moving to
-		int              m_hard_newlines        { 0 };
 		int              m_lines_count          { 1 };
 		std::vector<int> m_endlines;
 		bool             m_is_gray              { false };
@@ -200,7 +200,7 @@ private:
 		{NotificationType::Mouse3dConnected, NotificationLevel::RegularNotification, 5, "3D Mouse connected." },
 		{NotificationType::NewPresetsAviable, NotificationLevel::RegularNotification, 15, "New Presets are aviable.", "See here." },
 		{NotificationType::NewAppAviable, NotificationLevel::RegularNotification, 15, "New vesion of PrusaSlicer is aviable.", "Download." },
-		{NotificationType::PresetUpdateAviable, NotificationLevel::RegularNotification, 5, "Preset update is aviable.", "Update."},
+		{NotificationType::PresetUpdateAviable, NotificationLevel::RegularNotification, 5, "Configuration update is available.", "See more."},
 		//{NotificationType::LoadingFailed, NotificationLevel::RegularNotification, 20, "Loading of model has Failed" },
 
 		//{NotificationType::DeviceEjected, NotificationLevel::RegularNotification, 10, "Removable device has been safely ejected"} // if we want changeble text (like here name of device), we need to do it as CustomNotification

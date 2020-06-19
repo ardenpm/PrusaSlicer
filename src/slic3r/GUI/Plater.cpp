@@ -75,6 +75,7 @@
 #include "../Utils/PrintHost.hpp"
 #include "../Utils/FixModelByWin10.hpp"
 #include "../Utils/UndoRedo.hpp"
+#include "../Utils/PresetUpdater.hpp"
 #include "RemovableDriveManager.hpp"
 #include "InstanceCheck.hpp"
 #include "NotificationManager.hpp"
@@ -2049,7 +2050,8 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
 	notification_manager = new NotificationManager(this->q);
     
 	this->q->Bind(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, [this](EjectDriveNotificationClickedEvent&) { this->q->eject_drive(); });
-	this->q->Bind(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, [this](EjectDriveNotificationClickedEvent&) { this->q->export_gcode(false); });
+	this->q->Bind(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, [this](ExportGcodeNotificationClickedEvent&) { this->q->export_gcode(true); });
+	this->q->Bind(EVT_PRESET_UPDATE_AVIABLE_CLICKED, [this](PresetUpdateAviableClickedEvent&) {  wxGetApp().get_preset_updater()->on_update_notification_confirm(); });
 
 	this->q->Bind(EVT_REMOVABLE_DRIVE_EJECTED, [this, q](RemovableDriveEjectEvent &evt) {
 		if (evt.data.second) {

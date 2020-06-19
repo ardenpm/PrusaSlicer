@@ -35,6 +35,7 @@ public:
 		R_INCOMPAT_CONFIGURED,
 		R_UPDATE_INSTALLED,
 		R_UPDATE_REJECT,
+		R_UPDATE_NOTIFICATION
 	};
 
 	// If updating is enabled, check if updates are available in cache, if so, ask about installation.
@@ -45,6 +46,8 @@ public:
 
 	// "Update" a list of bundles from resources (behaves like an online update).
 	void install_bundles_rsrc(std::vector<std::string> bundles, bool snapshot = true) const;
+
+	void on_update_notification_confirm();
 private:
 	struct priv;
 	std::unique_ptr<priv> p;

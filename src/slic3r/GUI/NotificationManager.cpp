@@ -25,6 +25,7 @@ namespace GUI {
 
 wxDEFINE_EVENT(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, EjectDriveNotificationClickedEvent);
 wxDEFINE_EVENT(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, ExportGcodeNotificationClickedEvent);
+wxDEFINE_EVENT(EVT_PRESET_UPDATE_AVIABLE_CLICKED, PresetUpdateAviableClickedEvent);
 
 //ScalableBitmap bmp_icon;
 //------PopNotification--------
@@ -390,6 +391,11 @@ void NotificationManager::PopNotification::on_text_click()
 		assert(m_evt_handler != nullptr);
 		if (m_evt_handler != nullptr)
 			wxPostEvent(m_evt_handler, ExportGcodeNotificationClickedEvent(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED));
+	case NotificationType::PresetUpdateAviable :
+		//wxGetApp().plater()->export_gcode(false);
+		assert(m_evt_handler != nullptr);
+		if (m_evt_handler != nullptr)
+			wxPostEvent(m_evt_handler, PresetUpdateAviableClickedEvent(EVT_PRESET_UPDATE_AVIABLE_CLICKED));
 	default:
 		break;
 	}
@@ -586,11 +592,6 @@ bool NotificationManager::push_notification_data(NotificationManager::PopNotific
 			m_used_timestamps.insert(timestamp);
 		else
 			return false;
-
-	const std::string text1 = notification->get_data().text1;
-	size_t newlines = std::count(text1.begin(), text1.end(), '\n');
-	notification->set_hard_newlines_count(newlines);
-
 
 	if (!this->find_older(notification->get_type())) {
 		m_pop_notifications.emplace_back(notification);

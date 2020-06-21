@@ -331,7 +331,15 @@ void PresetUpdater::priv::sync_config(const VendorMap vendors)
 				continue;
 			}
 			Slic3r::rename_file(idx_path_temp, idx_path);
-			index = std::move(new_index);
+			//if we rename path we need to change it in Index object too or create the object again
+			//index = std::move(new_index);
+			try {
+				index.load(idx_path);
+			}
+			catch (const std::exception& /* err */) {
+				BOOST_LOG_TRIVIAL(error) << format("Could not load downloaded index %1% for vendor %2%: invalid index?", idx_path, vendor.name);
+				continue;
+			}
 			if (cancel)
 				return;
 		}
@@ -701,9 +709,9 @@ void PresetUpdater::slic3r_update_notify()
 	}
 }
 
-PresetUpdater::UpdateResult PresetUpdater::config_update(const Semver &old_slic3r_version) const
+PresetUpdater::UpdateResult PresetUpdater::config_update(const Semver& old_slic3r_version, bool no_notification) const
 {
-	if (! p->enabled_config_update) { return R_NOOP; }
+ 	if (! p->enabled_config_update) { return R_NOOP; }
 
 	auto updates = p->get_config_updates(old_slic3r_version);
 	if (updates.incompats.size() > 0) {
@@ -790,7 +798,37 @@ PresetUpdater::UpdateResult PresetUpdater::config_update(const Semver &old_slic3
 		}
 
 		// regular update
-		GUI::wxGetApp().plater()->get_notification_manager()->push_notification(GUI::NotificationType::PresetUpdateAviable, *(GUI::wxGetApp().plater()->get_current_canvas3D()));
+		if (no_notification) {
+			BOOST_LOG_TRIVIAL(info) << format("Update of %1% bundles available. Asking for confirmation ...", p->waiting_updates.updates.size());
+
+			std::vector<GUI::MsgUpdateConfig::Update> updates_msg;
+			for (const auto& update : updates.updates) {
+				std::string changelog_url = update.version.config_version.prerelease() == nullptr ? update.changelog_url : std::string();
+				updates_msg.emplace_back(update.vendor, update.version.config_version, update.version.comment, std::move(changelog_url));
+			}
+
+			GUI::MsgUpdateConfig dlg(updates_msg);
+
+			const auto res = dlg.ShowModal();
+			if (res == wxID_OK) {
+				BOOST_LOG_TRIVIAL(debug) << "User agreed to perform the update";
+				p->perform_updates(std::move(updates));
+
+				// Reload global configuration
+				auto* app_config = GUI::wxGetApp().app_config;
+				GUI::wxGetApp().preset_bundle->load_presets(*app_config);
+				GUI::wxGetApp().load_current_presets();
+				return R_UPDATE_INSTALLED;
+			}
+			else {
+				BOOST_LOG_TRIVIAL(info) << "User refused the update";
+				return R_UPDATE_REJECT;
+			}
+		} else {
+			p->set_waiting_updates(updates);
+			GUI::wxGetApp().plater()->get_notification_manager()->push_notification(GUI::NotificationType::PresetUpdateAviable, *(GUI::wxGetApp().plater()->get_current_canvas3D()));
+		}
+		
 		// MsgUpdateConfig will show after the notificaation is clicked
 	} else {
 		BOOST_LOG_TRIVIAL(info) << "No configuration updates available.";

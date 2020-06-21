@@ -198,9 +198,9 @@ private:
 		{NotificationType::ExportToRemovableFinished, NotificationLevel::ImportantNotification, 0, "Exporting finished.", "Eject drive." },
 		{NotificationType::Mouse3dDisconnected, NotificationLevel::RegularNotification, 10, "3D Mouse disconnected." },
 		{NotificationType::Mouse3dConnected, NotificationLevel::RegularNotification, 5, "3D Mouse connected." },
-		{NotificationType::NewPresetsAviable, NotificationLevel::RegularNotification, 15, "New Presets are aviable.", "See here." },
-		{NotificationType::NewAppAviable, NotificationLevel::RegularNotification, 15, "New vesion of PrusaSlicer is aviable.", "Download." },
-		{NotificationType::PresetUpdateAviable, NotificationLevel::RegularNotification, 5, "Configuration update is available.", "See more."},
+		{NotificationType::NewPresetsAviable, NotificationLevel::ImportantNotification, 20, "New Presets are available.", "See here." },
+		{NotificationType::NewAppAviable, NotificationLevel::ImportantNotification, 20, "New vesion of PrusaSlicer is available.", "Download page." },
+		{NotificationType::PresetUpdateAviable, NotificationLevel::ImportantNotification, 20, "Configuration update is available.", "See more."},
 		//{NotificationType::LoadingFailed, NotificationLevel::RegularNotification, 20, "Loading of model has Failed" },
 
 		//{NotificationType::DeviceEjected, NotificationLevel::RegularNotification, 10, "Removable device has been safely ejected"} // if we want changeble text (like here name of device), we need to do it as CustomNotification

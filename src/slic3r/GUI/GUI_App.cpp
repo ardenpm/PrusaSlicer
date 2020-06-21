@@ -1455,7 +1455,7 @@ void GUI_App::check_updates(const bool verbose)
 	
 	PresetUpdater::UpdateResult updater_result;
 	try {
-		updater_result = preset_updater->config_update(app_config->orig_version());
+		updater_result = preset_updater->config_update(app_config->orig_version(), verbose);
 		if (updater_result == PresetUpdater::R_INCOMPAT_EXIT) {
 			mainframe->Close();
 		}

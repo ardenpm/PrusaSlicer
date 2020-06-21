@@ -42,7 +42,8 @@ public:
 	// A false return value implies Slic3r should exit due to incompatibility of configuration.
 	// Providing old slic3r version upgrade profiles on upgrade of an application even in case
 	// that the config index installed from the Internet is equal to the index contained in the installation package.
-	UpdateResult config_update(const Semver &old_slic3r_version) const;
+	// no_notification = force modal textbox, otherwise some cases only shows notification
+	UpdateResult config_update(const Semver &old_slic3r_version, bool no_notification) const;
 
 	// "Update" a list of bundles from resources (behaves like an online update).
 	void install_bundles_rsrc(std::vector<std::string> bundles, bool snapshot = true) const;

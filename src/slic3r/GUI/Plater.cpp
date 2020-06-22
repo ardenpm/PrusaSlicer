@@ -3540,7 +3540,11 @@ void Plater::priv::on_process_completed(wxCommandEvent &evt)
             sidebar->set_btn_label(ActionButtonType::abReslice, "Slice now");
         show_action_buttons(true);
     }
-    else if (this->writing_to_removable_device || wxGetApp().get_mode() == comSimple)
+    else if (wxGetApp().get_mode() == comSimple)
+	{
+		show_action_buttons(false);
+	}
+	else if (this->writing_to_removable_device)
 	{
 		show_action_buttons(false);
 		notification_manager->push_notification(NotificationType::ExportToRemovableFinished, *q->get_current_canvas3D());

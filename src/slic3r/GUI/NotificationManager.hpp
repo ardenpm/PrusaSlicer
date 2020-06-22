@@ -72,7 +72,7 @@ public:
 			Hovered
 		};
 		 PopNotification(const NotificationData &n, const int id, wxEvtHandler* evt_handler);
-		~PopNotification();
+		virtual ~PopNotification();
 		RenderResult           render(GLCanvas3D& canvas, const float& initial_x);
 		// close will dissapear notification on next render
 		void                   close() { m_close_pending = true; }

@@ -392,11 +392,16 @@ void NotificationManager::PopNotification::on_text_click()
 		assert(m_evt_handler != nullptr);
 		if (m_evt_handler != nullptr)
 			wxPostEvent(m_evt_handler, ExportGcodeNotificationClickedEvent(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED));
+		break;
 	case NotificationType::PresetUpdateAviable :
 		//wxGetApp().plater()->export_gcode(false);
 		assert(m_evt_handler != nullptr);
 		if (m_evt_handler != nullptr)
 			wxPostEvent(m_evt_handler, PresetUpdateAviableClickedEvent(EVT_PRESET_UPDATE_AVIABLE_CLICKED));
+		break;
+	case NotificationType::NewAppAviable:
+		wxLaunchDefaultBrowser("https://github.com/prusa3d/PrusaSlicer/releases");
+		break;
 	default:
 		break;
 	}

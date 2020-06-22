@@ -393,6 +393,11 @@ bool GUI_App::on_init_inner()
     Bind(EVT_SLIC3R_VERSION_ONLINE, [this](const wxCommandEvent &evt) {
         app_config->set("version_online", into_u8(evt.GetString()));
         app_config->save();
+		if(this->plater_ != nullptr) {
+			if (*Semver::parse(SLIC3R_VERSION) < * Semver::parse(into_u8(evt.GetString()))) {
+				this->plater_->get_notification_manager()->push_notification(NotificationType::NewAppAviable, *(this->plater_->get_current_canvas3D()));
+			}
+		}
     });
 
     // initialize label colors and fonts

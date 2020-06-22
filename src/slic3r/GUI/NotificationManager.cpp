@@ -48,7 +48,12 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 {
 	if (m_finished)
 		return RenderResult::Finished;
-	
+	if (m_close_pending) {
+		// request of extra frame will be done in caller function by ret val ClosePending
+		m_finished = true;
+		return RenderResult::ClosePending;
+	}
+
 	RenderResult    ret_val = m_counting_down ? RenderResult::Countdown : RenderResult::Static;
 	Size            cnv_size = canvas.get_canvas_size();
 	ImGuiWrapper&   imgui = *wxGetApp().imgui();

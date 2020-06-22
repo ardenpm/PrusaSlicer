@@ -5065,6 +5065,8 @@ void Plater::reslice()
 
     // update type of preview
     p->preview->update_view_type(true);
+
+	p->notification_manager->clear_error();
 }
 
 void Plater::reslice_SLA_supports(const ModelObject &object, bool postpone_error_messages)

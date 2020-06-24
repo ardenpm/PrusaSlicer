@@ -88,7 +88,7 @@ public:
 		void                   substract_remaining_time() { m_remaining_time--; }
 		void                   set_gray(bool g) { m_is_gray = g; }
 	protected:
-		void                   count_lines();
+		void         init();
 		virtual void set_next_window_size(ImGuiWrapper& imgui);
 		virtual void render_text(ImGuiWrapper& imgui,
 			                     const float win_size_x, const float win_size_y,
@@ -117,11 +117,13 @@ public:
 		bool             m_close_pending        { false }; // will go to m_finished next render
 		const float      m_window_height_base   = 56.0f;
 		const float      m_window_width_base    = 450.0f;
-		const float      m_window_width_offset  = 70.0f;
+		const float      m_window_width_offset  = 75.0f;
 		float            m_window_height        { 56.0f };  
 		float            m_window_width         { 450.0f };
 		float            m_top_x                { 0.0f };  // x coord where top of window is moving to
 		int              m_lines_count          { 1 };
+		float            m_line_height;
+		float            m_line_spacing;
 		std::vector<int> m_endlines;
 		bool             m_is_gray              { false };
 		//if multiline = true, notification is showing all lines(>2)

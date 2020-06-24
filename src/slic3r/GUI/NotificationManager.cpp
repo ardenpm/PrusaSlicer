@@ -39,7 +39,7 @@ NotificationManager::PopNotification::PopNotification(const NotificationData &n,
     , m_text2          (n.text2)
 	, m_evt_handler    (evt_handler)
 {
-	count_lines();
+	init();
 }
 NotificationManager::PopNotification::~PopNotification()
 {
@@ -127,11 +127,17 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	imgui.end();
 	return ret_val;
 }
-void NotificationManager::PopNotification::count_lines()
+void NotificationManager::PopNotification::init()
 {
-	std::string text = m_text1 + " " + m_hypertext;
-	int last_end = 0;
-	m_lines_count = 0;
+	std::string text          = m_text1 + " " + m_hypertext;
+	int         last_end      = 0;
+	            m_lines_count = 0;
+
+	//determine line width 
+	m_line_height = ImGui::CalcTextSize("A").y;
+	m_line_spacing = 0;
+
+	// count lines
 	m_endlines.clear();
 	while (last_end < text.length() - 1)
 	{
@@ -143,7 +149,7 @@ void NotificationManager::PopNotification::count_lines()
 		}
 		else {
 			// find next suitable endline
-			if (ImGui::CalcTextSize(text.substr(last_end).c_str()).x >= m_window_width - m_window_width_offset) {
+			if (ImGui::CalcTextSize(text.substr(last_end).c_str()).x >= m_window_width - 3.5f * m_line_height) {// m_window_width_offset) {
 				// more than one line till end
 				int next_space = text.find_first_of(' ', last_end);
 				if (next_space > 0) {
@@ -166,31 +172,34 @@ void NotificationManager::PopNotification::count_lines()
 	}
 }
 void NotificationManager::PopNotification::set_next_window_size(ImGuiWrapper& imgui)
-{
-	//m_lines_count = text1_size.x / (m_window_width - m_window_width_offset) + 1;
-	//m_lines_count += m_hard_newlines;
+{ 
 	if (m_multiline) {
-		m_window_height = m_window_height_base + m_lines_count * 19;//11;
+		//m_window_height = m_window_height_base + m_lines_count * 19;//11;
+		m_window_height = m_lines_count * m_line_height;
+	}else
+	{
+		m_window_height = 2 * m_line_height;
 	}
+	m_window_height += 1 * m_line_height; // top and bottom
 	imgui.set_next_window_size(m_window_width, m_window_height, ImGuiCond_Always);
 }
 
 void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, const float win_size_x, const float win_size_y, const float win_pos_x, const float win_pos_y)
 {
-	ImVec2 win_size(win_size_x, win_size_y);
-	ImVec2 win_pos(win_pos_x, win_pos_y);
-	float x_offset = 20;
-	std::string fulltext = m_text1 + m_hypertext + m_text2;
-	ImVec2 text_size = ImGui::CalcTextSize(fulltext.c_str());
-	float line_height = ImGui::CalcTextSize("abcdefghijklmnopqrstuvwxyz0123456789").y;
+	ImVec2      win_size(win_size_x, win_size_y);
+	ImVec2      win_pos(win_pos_x, win_pos_y);
+	float       x_offset = 20;
+	std::string fulltext = m_text1 + m_hypertext; //+ m_text2;
+	ImVec2      text_size = ImGui::CalcTextSize(fulltext.c_str());
 	// text posistions are calculated by lines count
 	// large texts has "more" button or are displayed whole
 	// smaller texts are divided as one liners and two liners
 	if (m_lines_count > 2) {
 		if (m_multiline) {
+			
 			int last_end = 0;
-			float starting_y = 10;//text_size.y/2;
-			float shift_y = line_height;
+			float starting_y = m_line_height/2  ;//10;
+			float shift_y = m_line_height;// -m_line_height / 20;
 			for (size_t i = 0; i < m_lines_count; i++) {
 			    std::string line = m_text1.substr(last_end , m_endlines[i] - last_end);
 				last_end = m_endlines[i] + 1;
@@ -203,10 +212,12 @@ void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, cons
 			{
 				render_hypertext(imgui, x_offset + ImGui::CalcTextSize(m_text1.substr(m_endlines[m_lines_count - 2] + 1, m_endlines[m_lines_count - 1] - m_endlines[m_lines_count - 2] - 1).c_str()).x, starting_y + (m_lines_count - 1) * shift_y, m_hypertext);
 			}
+			
+			
 		} else {
 			// line1
 			ImGui::SetCursorPosX(x_offset);
-			ImGui::SetCursorPosY(win_size.y / 2 - win_size.y / 6 - line_height / 2);
+			ImGui::SetCursorPosY(win_size.y / 2 - win_size.y / 6 - m_line_height / 2);
 			imgui.text(m_text1.substr(0, m_endlines[0]).c_str());
 			// line2
 			std::string line = m_text1.substr(m_endlines[0] + 1, m_endlines[1] - m_endlines[0] - 1);
@@ -214,10 +225,10 @@ void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, cons
 				line = line.substr(0, line.length() - 6);
 			line += "..";
 			ImGui::SetCursorPosX(x_offset);
-			ImGui::SetCursorPosY(win_size.y / 2 + win_size.y / 6 - line_height / 2);
+			ImGui::SetCursorPosY(win_size.y / 2 + win_size.y / 6 - m_line_height / 2);
 			imgui.text(line.c_str());
 			// "More" hypertext
-			render_hypertext(imgui, x_offset + ImGui::CalcTextSize(line.c_str()).x, win_size.y / 2 + win_size.y / 6 - line_height / 2, "More", true);
+			render_hypertext(imgui, x_offset + ImGui::CalcTextSize(line.c_str()).x, win_size.y / 2 + win_size.y / 6 - m_line_height / 2, "More", true);
 		}
 	} else {
 		//text 1
@@ -226,11 +237,11 @@ void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, cons
 		if(m_lines_count > 1) {
 			// line1
 			ImGui::SetCursorPosX(x_offset);
-			ImGui::SetCursorPosY(win_size.y / 2 - win_size.y / 6 - line_height / 2);
+			ImGui::SetCursorPosY(win_size.y / 2 - win_size.y / 6 - m_line_height / 2);
 			imgui.text(m_text1.substr(0, m_endlines[0]).c_str());
 			// line2
 			std::string line = m_text1.substr(m_endlines[0] + 1);
-			cursor_y = win_size.y / 2 + win_size.y / 6 - line_height / 2;
+			cursor_y = win_size.y / 2 + win_size.y / 6 - m_line_height / 2;
 			ImGui::SetCursorPosX(x_offset);
 			ImGui::SetCursorPosY(cursor_y);
 			imgui.text(line.c_str());
@@ -319,15 +330,11 @@ void NotificationManager::PopNotification::render_close_button(ImGuiWrapper& img
 	orange_color.w = 0.8f;
 	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.0f, .0f, .0f, .0f));
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.0f, .0f, .0f, .0f));
-	//ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.0f, .0f, .0f, .0f));
-	//ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
 	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
-
-	//ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.75f, .75f, .75f, 1.f));
 	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
 	ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, ImVec4(0, .75f, .75f, 1.f));
 
-	ImGui::SetCursorPosX(win_size.x - 45);
+	ImGui::SetCursorPosX(win_size.x - m_line_height * 2.25f);//50);
 	ImGui::SetCursorPosY(win_size.y / 2 - 15);
 	//button - if part if treggered
 	std::string button_text;
@@ -357,21 +364,21 @@ void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui,
 	//countdown dots
 	std::string dot_text;
 	dot_text = m_remaining_time <= (float)m_data.duration / 4 * 3 ? ImGui::TimerDotEmptyMarker : ImGui::TimerDotMarker;
-	ImGui::SetCursorPosX(win_size.x - 21);
+	ImGui::SetCursorPosX(win_size.x - m_line_height);
 	//ImGui::SetCursorPosY(win_size.y / 2 - 24);
 	ImGui::SetCursorPosY(0);
 	imgui.text(dot_text.c_str());
 
 	dot_text = m_remaining_time < m_data.duration / 2 ? ImGui::TimerDotEmptyMarker : ImGui::TimerDotMarker;
-	ImGui::SetCursorPosX(win_size.x - 21);
+	ImGui::SetCursorPosX(win_size.x - m_line_height);
 	//ImGui::SetCursorPosY(win_size.y / 2 - 9);
-	ImGui::SetCursorPosY(win_size.y / 2 - 11);
+	ImGui::SetCursorPosY(win_size.y / 2 - m_line_height / 2);
 	imgui.text(dot_text.c_str());
 
 	dot_text = m_remaining_time <= m_data.duration / 4 ? ImGui::TimerDotEmptyMarker : ImGui::TimerDotMarker;
-	ImGui::SetCursorPosX(win_size.x - 21);
+	ImGui::SetCursorPosX(win_size.x - m_line_height);
 	//ImGui::SetCursorPosY(win_size.y / 2 + 6);
-	ImGui::SetCursorPosY(win_size.y - 22);
+	ImGui::SetCursorPosY(win_size.y - m_line_height);
 	imgui.text(dot_text.c_str());
 
 }
@@ -411,7 +418,7 @@ void NotificationManager::PopNotification::update(const NotificationData& n)
 	m_text1          = n.text1;
 	m_hypertext      = n.hypertext;
     m_text2          = n.text2;
-	count_lines();
+	init();
 }
 //SlicingCompleteLargeNotificationprev_size
 NotificationManager::SlicingCompleteLargeNotification::SlicingCompleteLargeNotification(const NotificationData& n, const int id, wxEvtHandler* evt_handler, bool large) :

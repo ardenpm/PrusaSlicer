@@ -385,7 +385,7 @@ bool GUI_App::on_init_inner()
     // supplied as argument to --datadir; in that case we should still run the wizard
     preset_bundle->setup_directories();
 
-#ifdef __WXMSW__
+#ifdef __WXMSW__ 
     associate_3mf_files();
 #endif // __WXMSW__
 

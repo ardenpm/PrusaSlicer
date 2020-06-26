@@ -136,7 +136,8 @@ void NotificationManager::PopNotification::init()
 	//determine line width 
 	m_line_height = ImGui::CalcTextSize("A").y;
 	m_line_spacing = 0;
-
+	BOOST_LOG_TRIVIAL(error) << "line height: " << m_line_height;
+	
 	// count lines
 	m_endlines.clear();
 	while (last_end < text.length() - 1)

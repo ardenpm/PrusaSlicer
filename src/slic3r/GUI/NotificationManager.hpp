@@ -113,6 +113,9 @@ public:
 		std::string      m_text2;
 		long             m_remaining_time;
 		bool             m_counting_down;
+		bool             m_fading_out           { false };
+		float            m_fading_time          { 0.0f }; // total time left when fading beggins
+		float            m_current_fade_opacity { 1.f };
 		bool             m_finished             { false }; // true - does not render, marked to delete
 		bool             m_close_pending        { false }; // will go to m_finished next render
 		const float      m_window_height_base   = 56.0f;

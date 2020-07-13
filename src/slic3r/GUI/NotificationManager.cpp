@@ -27,6 +27,15 @@ wxDEFINE_EVENT(EVT_EJECT_DRIVE_NOTIFICAION_CLICKED, EjectDriveNotificationClicke
 wxDEFINE_EVENT(EVT_EXPORT_GCODE_NOTIFICAION_CLICKED, ExportGcodeNotificationClickedEvent);
 wxDEFINE_EVENT(EVT_PRESET_UPDATE_AVIABLE_CLICKED, PresetUpdateAviableClickedEvent);
 
+namespace Notifications_Internal{
+	void push_style_color(ImGuiCol idx, const ImVec4& col, bool fading_out, float current_fade_opacity)
+	{
+		if (fading_out)
+			ImGui::PushStyleColor(idx, ImVec4(col.x, col.y, col.z, col.w * current_fade_opacity));
+		else
+			ImGui::PushStyleColor(idx, col);
+	}
+}
 //ScalableBitmap bmp_icon;
 //------PopNotification--------
 NotificationManager::PopNotification::PopNotification(const NotificationData &n, const int id, wxEvtHandler* evt_handler) :
@@ -60,12 +69,7 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	bool            shown = true;
 	std::string     name;
 	
-	//background color
-	if (m_is_gray)
-	{
-		ImVec4 backcolor(0.7f, 0.7f, 0.7f, 0.5f);
-	    ImGui::PushStyleColor(ImGuiCol_WindowBg, backcolor);
-	}
+	
 	//top y of window
 	m_top_x = initial_x + m_window_height;
 	//top right position
@@ -83,6 +87,10 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 		//BOOST_LOG_TRIVIAL(error) << "mouse";
 		ImGui::SetNextWindowFocus();
 		ret_val = RenderResult::Hovered;
+		//reset fading
+		m_fading_out = false;
+		m_current_fade_opacity = 1.f;
+		m_remaining_time = m_data.duration;
 	}
 
 	if (m_counting_down && m_remaining_time < 0)
@@ -94,13 +102,30 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 		return RenderResult::ClosePending;
 	}
 
+	bool pop_style_WindowBg = false;
+	if (m_fading_out) {
+		m_current_fade_opacity -= 1.f / ((m_fading_time + 1.f) * 60.f);
+		//m_current_fade_opacity = m_remaining_time / m_fading_time * 0.8f;
+		BOOST_LOG_TRIVIAL(error) << m_remaining_time << " / " << m_fading_time << "* 0.8 = " << m_current_fade_opacity;
+		//ImVec4 window_bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+		//window_bg.w = m_current_fade_opacity;
+		//ImGui::PushStyleColor(ImGuiCol_WindowBg, window_bg);
+		Notifications_Internal::push_style_color(ImGuiCol_WindowBg, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg), m_fading_out, m_current_fade_opacity);
+		Notifications_Internal::push_style_color(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text), m_fading_out, m_current_fade_opacity);
+		pop_style_WindowBg = true;
+	}
+	if (m_is_gray) {
+		ImVec4 backcolor(0.7f, 0.7f, 0.7f, 0.5f);
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, backcolor);
+		pop_style_WindowBg = true;
+	}
+
 	//name of window - probably indentifies window and is shown so last_end add whitespaces according to id
 	for (size_t i = 0; i < m_id; i++)
 		name += " ";
 	if (imgui.begin(name, &shown, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar )) {
 		if (shown) {
-			if (m_is_gray)
-				ImGui::PopStyleColor();
+			
 			ImVec2 win_size = ImGui::GetWindowSize();
 			
 			
@@ -125,6 +150,12 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 		}
 	}
 	imgui.end();
+	if (m_is_gray)
+		ImGui::PopStyleColor();
+	if (pop_style_WindowBg) {
+		ImGui::PopStyleColor();
+		ImGui::PopStyleColor();
+	}
 	return ret_val;
 }
 void NotificationManager::PopNotification::init()
@@ -135,6 +166,7 @@ void NotificationManager::PopNotification::init()
 
 	//determine line width 
 	m_line_height = ImGui::CalcTextSize("A").y;
+	//m_line_height = 30;
 	m_line_spacing = 0;
 	BOOST_LOG_TRIVIAL(error) << "line height: " << m_line_height;
 	
@@ -271,10 +303,6 @@ void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, cons
 		}
 		*/
 	}
-
-
-	
-	
 }
 
 void NotificationManager::PopNotification::render_hypertext(ImGuiWrapper& imgui, const float text_x, const float text_y, const std::string text, bool more)
@@ -308,7 +336,7 @@ void NotificationManager::PopNotification::render_hypertext(ImGuiWrapper& imgui,
 		orange_color.y += 0.2f;
 
 	//text
-	ImGui::PushStyleColor(ImGuiCol_Text, orange_color);
+	Notifications_Internal::push_style_color(ImGuiCol_Text, orange_color, m_fading_out, m_current_fade_opacity);
 	ImGui::SetCursorPosX(text_x);
 	ImGui::SetCursorPosY(text_y);
 	imgui.text(text.c_str());
@@ -319,7 +347,7 @@ void NotificationManager::PopNotification::render_hypertext(ImGuiWrapper& imgui,
 	lineEnd.y -= 2;
 	ImVec2 lineStart = lineEnd;
 	lineStart.x = ImGui::GetItemRectMin().x;
-	ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, IM_COL32((int)(orange_color.x * 255), (int)(orange_color.y * 255), (int)(orange_color.z * 255), (int)(orange_color.w * 255)));
+	ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, IM_COL32((int)(orange_color.x * 255), (int)(orange_color.y * 255), (int)(orange_color.z * 255), (int)(orange_color.w * 255.f * (m_fading_out ? m_current_fade_opacity : 1.f))));
 
 }
 
@@ -331,9 +359,9 @@ void NotificationManager::PopNotification::render_close_button(ImGuiWrapper& img
 	orange_color.w = 0.8f;
 	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.0f, .0f, .0f, .0f));
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.0f, .0f, .0f, .0f));
-	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
-	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
-	ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, ImVec4(0, .75f, .75f, 1.f));
+	Notifications_Internal::push_style_color(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg), m_fading_out, m_current_fade_opacity);
+	Notifications_Internal::push_style_color(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f), m_fading_out, m_current_fade_opacity);
+	Notifications_Internal::push_style_color(ImGuiCol_TextSelectedBg, ImVec4(0, .75f, .75f, 1.f), m_fading_out, m_current_fade_opacity);
 
 	ImGui::SetCursorPosX(win_size.x - m_line_height * 2.25f);//50);
 	ImGui::SetCursorPosY(win_size.y / 2 - 15);
@@ -382,10 +410,11 @@ void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui,
 	ImGui::SetCursorPosY(win_size.y - m_line_height);
 	imgui.text(dot_text.c_str());
 
+	if (!m_fading_out && m_remaining_time <= m_data.duration / 4) {
+		m_fading_out = true;
+		m_fading_time = m_remaining_time;
+	}
 }
-
-
-
 void NotificationManager::PopNotification::on_text_click()
 {
 	switch (m_data.type)
@@ -421,6 +450,7 @@ void NotificationManager::PopNotification::update(const NotificationData& n)
     m_text2          = n.text2;
 	init();
 }
+
 //SlicingCompleteLargeNotificationprev_size
 NotificationManager::SlicingCompleteLargeNotification::SlicingCompleteLargeNotification(const NotificationData& n, const int id, wxEvtHandler* evt_handler, bool large) :
 	  NotificationManager::PopNotification(n, id, evt_handler)

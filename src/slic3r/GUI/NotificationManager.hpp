@@ -113,6 +113,8 @@ public:
 		std::string      m_text2;
 		long             m_remaining_time;
 		bool             m_counting_down;
+		long             m_last_remaining_time;
+		int              m_countdown_frame      { 0 };
 		bool             m_fading_out           { false };
 		float            m_fading_time          { 0.0f }; // total time left when fading beggins
 		float            m_current_fade_opacity { 1.f };

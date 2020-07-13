@@ -39,14 +39,15 @@ namespace Notifications_Internal{
 //ScalableBitmap bmp_icon;
 //------PopNotification--------
 NotificationManager::PopNotification::PopNotification(const NotificationData &n, const int id, wxEvtHandler* evt_handler) :
-	  m_data           (n)
-	, m_id             (id)    
-	, m_remaining_time (n.duration)
-	, m_counting_down  (n.duration != 0)
-	, m_text1          (n.text1)
-    , m_hypertext      (n.hypertext)
-    , m_text2          (n.text2)
-	, m_evt_handler    (evt_handler)
+	  m_data                (n)
+	, m_id                  (id)    
+	, m_remaining_time      (n.duration)
+	, m_last_remaining_time (n.duration)
+	, m_counting_down       (n.duration != 0)
+	, m_text1               (n.text1)
+    , m_hypertext           (n.hypertext)
+    , m_text2               (n.text2)
+	, m_evt_handler         (evt_handler)
 {
 	init();
 }
@@ -414,6 +415,20 @@ void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui,
 		m_fading_out = true;
 		m_fading_time = m_remaining_time;
 	}
+	
+	if (m_last_remaining_time != m_remaining_time) {
+		m_last_remaining_time = m_remaining_time;
+		m_countdown_frame = 0;
+	}
+	//countdown line
+	ImVec4 orange_color = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+	float  invisible_length = ((float)(m_data.duration - m_remaining_time) / (float)m_data.duration * win_size_x);
+	invisible_length -= win_size_x / ((float)m_data.duration * 60.f) * (60 - m_countdown_frame);
+	ImVec2 lineEnd = ImVec2(win_pos_x - invisible_length, win_pos_y + win_size_y - 5);
+	ImVec2 lineStart = ImVec2(win_pos_x - win_size_x, win_pos_y + win_size_y - 5);
+	ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, IM_COL32((int)(orange_color.x * 255), (int)(orange_color.y * 255), (int)(orange_color.z * 255), (int)(orange_color.w * 255.f * (m_fading_out ? m_current_fade_opacity : 1.f))), 2.f);
+	
+	m_countdown_frame++;
 }
 void NotificationManager::PopNotification::on_text_click()
 {

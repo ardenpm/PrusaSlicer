@@ -87,6 +87,7 @@ public:
 		const NotificationData get_data() const { return m_data;  }
 		void                   substract_remaining_time() { m_remaining_time--; }
 		void                   set_gray(bool g) { m_is_gray = g; }
+		void                   set_paused(bool p) { m_paused = p; }
 	protected:
 		void         init();
 		virtual void set_next_window_size(ImGuiWrapper& imgui);
@@ -114,6 +115,7 @@ public:
 		long             m_remaining_time;
 		bool             m_counting_down;
 		long             m_last_remaining_time;
+		bool             m_paused               { false };
 		int              m_countdown_frame      { 0 };
 		bool             m_fading_out           { false };
 		float            m_fading_time          { 0.0f }; // total time left when fading beggins
@@ -195,6 +197,7 @@ private:
 	std::deque<PopNotification*> m_pop_notifications;
 	int                          m_next_id { 1 };
 	long                         m_last_time { 0 };
+	bool                         m_hovered { false };
 	//timestamps used for slining finished - notification could be gone so it needs to be stored here
 	std::unordered_set<int>      m_used_timestamps;
 

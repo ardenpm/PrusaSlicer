@@ -388,9 +388,10 @@ void NotificationManager::PopNotification::render_close_button(ImGuiWrapper& img
 }
 void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui, const float win_size_x, const float win_size_y, const float win_pos_x, const float win_pos_y)
 {
+	/*
 	ImVec2 win_size(win_size_x, win_size_y);
 	ImVec2 win_pos(win_pos_x, win_pos_y);
-
+	
 	//countdown dots
 	std::string dot_text;
 	dot_text = m_remaining_time <= (float)m_data.duration / 4 * 3 ? ImGui::TimerDotEmptyMarker : ImGui::TimerDotMarker;
@@ -410,7 +411,7 @@ void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui,
 	//ImGui::SetCursorPosY(win_size.y / 2 + 6);
 	ImGui::SetCursorPosY(win_size.y - m_line_height);
 	imgui.text(dot_text.c_str());
-
+	*/
 	if (!m_fading_out && m_remaining_time <= m_data.duration / 4) {
 		m_fading_out = true;
 		m_fading_time = m_remaining_time;

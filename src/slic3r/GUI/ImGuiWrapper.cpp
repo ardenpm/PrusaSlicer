@@ -37,15 +37,15 @@ namespace GUI {
 
 
 static const std::map<const char, std::string> font_icons = {
-    {ImGui::PrintIconMarker     , "cog"             },
-    {ImGui::PrinterIconMarker   , "printer"         },
-    {ImGui::PrinterSlaIconMarker, "sla_printer"     },
-    {ImGui::FilamentIconMarker  , "spool"           },
-    {ImGui::MaterialIconMarker  , "resin"           },
-	{ImGui::CloseIconMarker     , "cross"           },
-	{ImGui::CloseIconHoverMarker, "cross_focus"     },
-	{ImGui::TimerDotMarker      , "timer_dot"       },
-    {ImGui::TimerDotEmptyMarker , "timer_dot_empty" }
+    {ImGui::PrintIconMarker     , "cog"               },
+    {ImGui::PrinterIconMarker   , "printer"           },
+    {ImGui::PrinterSlaIconMarker, "sla_printer"       },
+    {ImGui::FilamentIconMarker  , "spool"             },
+    {ImGui::MaterialIconMarker  , "resin"             },
+	{ImGui::CloseIconMarker     , "cross"             },
+	{ImGui::CloseIconHoverMarker, "cross_focus_large" },
+	{ImGui::TimerDotMarker      , "timer_dot"         },
+    {ImGui::TimerDotEmptyMarker , "timer_dot_empty"   }
 };
 
 ImGuiWrapper::ImGuiWrapper()

@@ -379,9 +379,12 @@ void NotificationManager::PopNotification::render_close_button(ImGuiWrapper& img
 	//button - if part if treggered
 	std::string button_text;
 	button_text = ImGui::CloseIconMarker;
-	if (ImGui::IsMouseHoveringRect(ImVec2(win_pos.x - 45, win_pos.y + win_size.y / 2 - 15),
-		ImVec2(win_pos.x - 15, win_pos.y + win_size.y / 2 + 15),
-		true))
+	//if (ImGui::IsMouseHoveringRect(ImVec2(win_pos.x - 45, win_pos.y + win_size.y / 2 - 15),
+	//	ImVec2(win_pos.x - 15, win_pos.y + win_size.y / 2 + 15),
+	//	true))
+	if (ImGui::IsMouseHoveringRect(ImVec2(win_pos.x - win_size.x / 10.f, win_pos.y),
+		                           ImVec2(win_pos.x, win_pos.y + win_size.y),
+		                           true))
 	{
 		button_text = ImGui::CloseIconHoverMarker;
 	}

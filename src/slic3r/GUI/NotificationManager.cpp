@@ -70,6 +70,9 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	bool            shown = true;
 	std::string     name;
 	
+
+	if (m_line_height != ImGui::CalcTextSize("A").y)
+		init();
 	
 	//top y of window
 	m_top_x = initial_x + m_window_height;
@@ -543,7 +546,8 @@ void NotificationManager::SlicingCompleteLargeNotification::set_large(bool l)
 //------NotificationManager--------
 NotificationManager::NotificationManager(wxEvtHandler* evt_handler) :
 	m_evt_handler(evt_handler)
-{}
+{
+}
 NotificationManager::~NotificationManager()
 {
 	for (PopNotification* notification : m_pop_notifications)
@@ -813,6 +817,13 @@ bool NotificationManager::find_older(NotificationType type, const std::string& t
 		}
 	}
 	return false;
+}
+void NotificationManager::dpi_changed()
+{
+	for (auto it = m_pop_notifications.begin(); it != m_pop_notifications.end(); ++it)
+	{
+		(*it)->init();
+	}
 }
 void NotificationManager::print_to_console() const 
 {

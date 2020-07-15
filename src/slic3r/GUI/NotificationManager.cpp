@@ -818,12 +818,10 @@ bool NotificationManager::find_older(NotificationType type, const std::string& t
 	}
 	return false;
 }
+
 void NotificationManager::dpi_changed()
 {
-	for (auto it = m_pop_notifications.begin(); it != m_pop_notifications.end(); ++it)
-	{
-		(*it)->init();
-	}
+
 }
 void NotificationManager::print_to_console() const 
 {

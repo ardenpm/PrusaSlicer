@@ -190,6 +190,7 @@ public:
 	void set_error_gray(bool g);
 	// imidietly stops showing slicing errors
 	void clear_error();
+	void dpi_changed();
 private:
 	//pushes notification into the queue of notifications that are rendered
 	//can be used to create custom notification

@@ -422,7 +422,7 @@ void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui,
 		m_last_remaining_time = m_remaining_time;
 		m_countdown_frame = 0;
 	}
-	
+	/*
 	//countdown line
 	ImVec4 orange_color = ImGui::GetStyleColorVec4(ImGuiCol_Button);
 	float  invisible_length = ((float)(m_data.duration - m_remaining_time) / (float)m_data.duration * win_size_x);
@@ -432,6 +432,7 @@ void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui,
 	ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, IM_COL32((int)(orange_color.x * 255), (int)(orange_color.y * 255), (int)(orange_color.z * 255), (int)(orange_color.w * 255.f * (m_fading_out ? m_current_fade_opacity : 1.f))), 2.f);
 	if (!m_paused)
 		m_countdown_frame++;
+		*/
 }
 void NotificationManager::PopNotification::on_text_click()
 {
@@ -467,6 +468,16 @@ void NotificationManager::PopNotification::update(const NotificationData& n)
 	m_hypertext      = n.hypertext;
     m_text2          = n.text2;
 	init();
+}
+bool NotificationManager::PopNotification::compare_text(const std::string& text)
+{
+	std::string t1(m_text1);
+	std::string t2(text);
+	t1.erase(std::remove_if(t1.begin(), t1.end(), ::isspace), t1.end());
+	t2.erase(std::remove_if(t2.begin(), t2.end(), ::isspace), t2.end());
+	if (t1.compare(t2) == 0)
+		return true;
+	return false;
 }
 
 //SlicingCompleteLargeNotificationprev_size
@@ -647,6 +658,7 @@ bool NotificationManager::push_notification_data(const NotificationData &notific
 }
 bool NotificationManager::push_notification_data(NotificationManager::PopNotification* notification, GLCanvas3D& canvas, int timestamp)
 {
+	// if timestamped notif, push only new one
 	if (timestamp != 0) {
 		if (m_used_timestamps.find(timestamp) == m_used_timestamps.end()) {
 			m_used_timestamps.insert(timestamp);
@@ -654,13 +666,11 @@ bool NotificationManager::push_notification_data(NotificationManager::PopNotific
 			return false;
 		}
 	}
-
-	if (!this->find_older(notification->get_type())) {
+	if (!this->find_older(notification->get_type(), notification->get_data().text1)) {
 		m_pop_notifications.emplace_back(notification);
 		canvas.request_extra_frame();
 		return true;
-	}
-	else {
+	} else {
 		m_pop_notifications.back()->update(notification->get_data());
 		canvas.request_extra_frame();
 		return false;
@@ -673,8 +683,6 @@ void NotificationManager::render_notifications(GLCanvas3D& canvas)
 	bool     request_next_frame = false;
 	bool     render_main = false;
 	bool     hovered = false;
-	BOOST_LOG_TRIVIAL(error) << "hover: " << m_hovered;
-	//BOOST_LOG_TRIVIAL(error) << "render";
 	// iterate thru notifications and render them / erease them
 	for (auto it = m_pop_notifications.begin(); it != m_pop_notifications.end();) {
 		if ((*it)->get_finished()) {
@@ -749,14 +757,21 @@ void NotificationManager::render_main_window(GLCanvas3D& canvas, float height)
 	imgui.end();
 }
 
-bool NotificationManager::find_older(NotificationType type)
+bool NotificationManager::find_older(NotificationType type, const std::string& text)
 {
-	if (type == NotificationType::CustomNotification)
+	// if type that allows multiple notifications of same type - check for same text
+	if (type == NotificationType::CustomNotification || type == NotificationType::SlicingWarning)
+	{
+
+	}
 		return false;
 	for (auto it = m_pop_notifications.begin(); it != m_pop_notifications.end(); ++it)
 	{
-		if((*it)->get_type() == type && !(*it)->get_finished())
-		{
+		if((*it)->get_type() == type && !(*it)->get_finished()) {
+			if (type == NotificationType::CustomNotification || type == NotificationType::SlicingWarning) {
+				if (!(*it)->compare_text(text))
+					continue;
+			}
 			if (it != m_pop_notifications.end() - 1)
 				std::rotate(it, it + 1, m_pop_notifications.end());
 			return true;

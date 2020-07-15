@@ -3457,7 +3457,12 @@ void Plater::priv::on_slicing_update(SlicingStatusEvent &evt)
                 state = print_object->step_state_with_warnings(static_cast<SLAPrintObjectStep>(warning_step));
         }
         // Now process state.warnings.
+		for (auto const& warning : state.warnings) {
+			notification_manager->push_warning_notification(warning.message, *q->get_current_canvas3D());
+		}
     }
+	// only for testing warning purpose
+	notification_manager->push_warning_notification(evt.status.text, *q->get_current_canvas3D());
 }
 
 void Plater::priv::on_slicing_completed(wxCommandEvent & evt)

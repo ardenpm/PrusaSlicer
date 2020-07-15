@@ -88,6 +88,7 @@ public:
 		void                   substract_remaining_time() { m_remaining_time--; }
 		void                   set_gray(bool g) { m_is_gray = g; }
 		void                   set_paused(bool p) { m_paused = p; }
+		bool                   compare_text(const std::string& text);
 	protected:
 		void         init();
 		virtual void set_next_window_size(ImGuiWrapper& imgui);
@@ -190,7 +191,7 @@ private:
 	bool push_notification_data(NotificationManager::PopNotification* notification, GLCanvas3D& canvas, int timestamp);
 	void render_main_window(GLCanvas3D& canvas, float height);
 	//finds older notification of same type and moves it to the end of queue. returns true if found
-	bool find_older(NotificationType type);
+	bool find_older(NotificationType type, const std::string& text);
 	void print_to_console() const;
 
 	wxEvtHandler*                m_evt_handler;

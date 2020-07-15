@@ -696,13 +696,13 @@ void GLCanvas3D::WarningTexture::activate(WarningTexture::Warning warning, bool 
 		if (!text.empty())
 			wxGetApp().plater()->get_notification_manager()->cancel_plater_warning_notification(text);
 
-        if (m_warnings.empty()) { // nothing remains to be shown
+        /*if (m_warnings.empty()) { // nothing remains to be shown
             reset();
             m_msg_text = "";// save information for rescaling
             return;
-        }
+        }*/
     }
-
+	/*
     // Look at the end of our vector and generate proper texture.
     std::string text;
     bool red_colored = false;
@@ -724,6 +724,7 @@ void GLCanvas3D::WarningTexture::activate(WarningTexture::Warning warning, bool 
     // save information for rescaling
     m_msg_text = text;
     m_is_colored_red = red_colored;
+	*/
 }
 
 

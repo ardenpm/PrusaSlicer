@@ -108,18 +108,22 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 	if (m_fading_out) {
 		if (!m_paused)
 			m_current_fade_opacity -= 1.f / ((m_fading_time + 1.f) * 60.f);
-		//m_current_fade_opacity = m_remaining_time / m_fading_time * 0.8f;
-		//BOOST_LOG_TRIVIAL(error) << m_remaining_time << " / " << m_fading_time << "* 0.8 = " << m_current_fade_opacity;
-		//ImVec4 window_bg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-		//window_bg.w = m_current_fade_opacity;
-		//ImGui::PushStyleColor(ImGuiCol_WindowBg, window_bg);
 		Notifications_Internal::push_style_color(ImGuiCol_WindowBg, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg), m_fading_out, m_current_fade_opacity);
 		Notifications_Internal::push_style_color(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text), m_fading_out, m_current_fade_opacity);
 		fading_pop = true;
 	}
 	if (m_is_gray) {
 		ImVec4 backcolor(0.7f, 0.7f, 0.7f, 0.5f);
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, backcolor);
+		Notifications_Internal::push_style_color(ImGuiCol_WindowBg, backcolor, m_fading_out, m_current_fade_opacity);
+	} else if (m_data.level == NotificationLevel::ErrorNotification) {
+		ImVec4 backcolor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+		backcolor.x += 0.3f;
+		Notifications_Internal::push_style_color(ImGuiCol_WindowBg, backcolor, m_fading_out, m_current_fade_opacity);
+	} else if (m_data.level == NotificationLevel::WarningNotification) {
+		ImVec4 backcolor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+		backcolor.x += 0.3f;
+		backcolor.y += 0.15f;
+		Notifications_Internal::push_style_color(ImGuiCol_WindowBg, backcolor, m_fading_out, m_current_fade_opacity);
 	}
 
 	//name of window - probably indentifies window and is shown so last_end add whitespaces according to id
@@ -152,12 +156,17 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 		}
 	}
 	imgui.end();
-	if (m_is_gray)
-		ImGui::PopStyleColor();
+	
 	if (fading_pop) {
 		ImGui::PopStyleColor();
 		ImGui::PopStyleColor();
 	}
+	if (m_is_gray)
+		ImGui::PopStyleColor();
+	else if (m_data.level == NotificationLevel::ErrorNotification)
+		ImGui::PopStyleColor();
+	else if (m_data.level == NotificationLevel::WarningNotification)
+		ImGui::PopStyleColor();
 	return ret_val;
 }
 void NotificationManager::PopNotification::init()
@@ -580,7 +589,7 @@ void NotificationManager::push_warning_notification(const std::string& text, GLC
 }
 void NotificationManager::push_plater_error_notification(const std::string& text, GLCanvas3D& canvas)
 {
-	push_notification_data({ NotificationType::PlaterError, NotificationLevel::WarningNotification, 0, "ERROR:\n" + text }, canvas, 0);
+	push_notification_data({ NotificationType::PlaterError, NotificationLevel::ErrorNotification, 0, "ERROR:\n" + text }, canvas, 0);
 }
 void NotificationManager::push_plater_warning_notification(const std::string& text, GLCanvas3D& canvas)
 {

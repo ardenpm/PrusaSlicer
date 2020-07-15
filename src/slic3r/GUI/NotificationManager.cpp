@@ -578,7 +578,30 @@ void NotificationManager::push_warning_notification(const std::string& text, GLC
 	//set_error_gray(false);
 	push_notification_data({ NotificationType::SlicingWarning, NotificationLevel::WarningNotification, 0, "WARNING:\n" + text }, canvas, 0);
 }
-
+void NotificationManager::push_plater_error_notification(const std::string& text, GLCanvas3D& canvas)
+{
+	push_notification_data({ NotificationType::PlaterError, NotificationLevel::WarningNotification, 0, "ERROR:\n" + text }, canvas, 0);
+}
+void NotificationManager::push_plater_warning_notification(const std::string& text, GLCanvas3D& canvas)
+{
+	push_notification_data({ NotificationType::PlaterWarning, NotificationLevel::WarningNotification, 0, "WARNING:\n" + text }, canvas, 0);
+}
+void NotificationManager::clear_plater_error_notification()
+{
+	for (PopNotification* notification : m_pop_notifications) {
+		if (notification->get_type() == NotificationType::PlaterError) {
+			notification->close();
+		}
+	}
+}
+void NotificationManager::cancel_plater_warning_notification(const std::string& text)
+{
+	for (PopNotification* notification : m_pop_notifications) {
+		if (notification->get_type() == NotificationType::PlaterWarning && notification->compare_text("WARNING:\n" + text)) {
+			notification->close();
+		}
+	}
+}
 void NotificationManager::set_error_gray(bool g)
 {
 	for (PopNotification* notification : m_pop_notifications) {
@@ -760,7 +783,7 @@ void NotificationManager::render_main_window(GLCanvas3D& canvas, float height)
 bool NotificationManager::find_older(NotificationType type, const std::string& text)
 {
 	// if type that allows multiple notifications of same type - check for same text
-	if (type == NotificationType::CustomNotification || type == NotificationType::SlicingWarning)
+	if (type == NotificationType::CustomNotification || type == NotificationType::SlicingWarning || type == NotificationType::PlaterWarning)
 	{
 
 	}

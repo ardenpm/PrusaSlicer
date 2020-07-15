@@ -36,6 +36,8 @@ enum class NotificationType
 	ValidateError, // currently not used - instead Slicing error is used for both slicing and validate errors
 	SlicingError,
 	SlicingWarning,
+	PlaterError,
+	PlaterWarning,
 	ApplyError
 
 };
@@ -173,6 +175,10 @@ public:
 	void push_warning_notification(const std::string& text, GLCanvas3D& canvas);
 	//void push_error_notification(const std::string& text, GLCanvas3D& canvas);
 	//void push_slicing_error_notification(const std::string& text, GLCanvas3D& canvas);
+	void push_plater_error_notification(const std::string& text, GLCanvas3D& canvas);
+	void push_plater_warning_notification(const std::string& text, GLCanvas3D& canvas);
+	void clear_plater_error_notification();
+	void cancel_plater_warning_notification(const std::string& text);
 	// creates special notification slicing complete
 	// if large = true prints printing time and export button 
 	void push_slicing_complete_notification(GLCanvas3D& canvas, int timestamp, bool large);

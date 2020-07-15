@@ -664,12 +664,38 @@ void GLCanvas3D::WarningTexture::activate(WarningTexture::Warning warning, bool 
 
         m_warnings.emplace_back(warning);
         std::sort(m_warnings.begin(), m_warnings.end());
+
+		std::string text;
+		switch (warning) {
+			case ObjectOutside: text = L("An object outside the print area was detected"); break;
+			case ToolpathOutside: text = L("A toolpath outside the print area was detected"); break;
+			case SlaSupportsOutside: text = L("SLA supports outside the print area were detected"); break;
+			case SomethingNotShown: text = L("Some objects are not visible"); break;
+			case ObjectClashed: wxGetApp().plater()->get_notification_manager()->push_plater_error_notification(L("An object outside the print area was detected\n"
+																												 "Resolve the current problem to continue slicing"), 
+				                                                                                                *(wxGetApp().plater()->get_current_canvas3D()));
+				break;
+		}
+		if (!text.empty())
+			wxGetApp().plater()->get_notification_manager()->push_plater_warning_notification(text, *(wxGetApp().plater()->get_current_canvas3D()));
     }
     else {
         if (it == m_warnings.end()) // deactivating something that is not active is an easy task
             return;
 
         m_warnings.erase(it);
+
+		std::string text;
+		switch (warning) {
+		case ObjectOutside: text = L("An object outside the print area was detected"); break;
+		case ToolpathOutside: text = L("A toolpath outside the print area was detected"); break;
+		case SlaSupportsOutside: text = L("SLA supports outside the print area were detected"); break;
+		case SomethingNotShown: text = L("Some objects are not visible"); break;
+		case ObjectClashed: wxGetApp().plater()->get_notification_manager()->clear_plater_error_notification(); break;
+		}
+		if (!text.empty())
+			wxGetApp().plater()->get_notification_manager()->cancel_plater_warning_notification(text);
+
         if (m_warnings.empty()) { // nothing remains to be shown
             reset();
             m_msg_text = "";// save information for rescaling

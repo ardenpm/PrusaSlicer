@@ -149,6 +149,7 @@ NotificationManager::PopNotification::RenderResult NotificationManager::PopNotif
 			*/
 			if(m_counting_down)
 				render_countdown(imgui, win_size.x, win_size.y, win_pos.x, win_pos.y);
+			render_left_sign(imgui);
 			render_text(imgui, win_size.x, win_size.y, win_pos.x, win_pos.y);
 			render_close_button(imgui, win_size.x, win_size.y, win_pos.x, win_pos.y);
 			
@@ -180,8 +181,16 @@ void NotificationManager::PopNotification::init()
 
 	//determine line width 
 	m_line_height = ImGui::CalcTextSize("A").y;
-	//m_line_height = 30;
-	m_line_spacing = 0;
+
+	m_left_indentation = m_line_height;
+	if (m_data.level == NotificationLevel::ErrorNotification || m_data.level == NotificationLevel::WarningNotification) {
+		std::string text;
+		text = (m_data.level == NotificationLevel::ErrorNotification ? ImGui::ErrorMarker : ImGui::WarningMarker);
+		float picture_width = ImGui::CalcTextSize(text.c_str()).x;
+		m_left_indentation = picture_width + m_line_height / 2;
+	}
+	m_window_width_offset = m_left_indentation + m_line_height * 2;
+
 	BOOST_LOG_TRIVIAL(error) << "line height: " << m_line_height;
 	
 	// count lines
@@ -235,7 +244,7 @@ void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, cons
 {
 	ImVec2      win_size(win_size_x, win_size_y);
 	ImVec2      win_pos(win_pos_x, win_pos_y);
-	float       x_offset = 20;
+	float       x_offset = m_left_indentation;
 	std::string fulltext = m_text1 + m_hypertext; //+ m_text2;
 	ImVec2      text_size = ImGui::CalcTextSize(fulltext.c_str());
 	// text posistions are calculated by lines count
@@ -245,7 +254,7 @@ void NotificationManager::PopNotification::render_text(ImGuiWrapper& imgui, cons
 		if (m_multiline) {
 			
 			int last_end = 0;
-			float starting_y = m_line_height/2  ;//10;
+			float starting_y = m_line_height/2;//10;
 			float shift_y = m_line_height;// -m_line_height / 20;
 			for (size_t i = 0; i < m_lines_count; i++) {
 			    std::string line = m_text1.substr(last_end , m_endlines[i] - last_end);
@@ -444,10 +453,25 @@ void NotificationManager::PopNotification::render_countdown(ImGuiWrapper& imgui,
 	invisible_length -= win_size_x / ((float)m_data.duration * 60.f) * (60 - m_countdown_frame);
 	ImVec2 lineEnd = ImVec2(win_pos_x - invisible_length, win_pos_y + win_size_y - 5);
 	ImVec2 lineStart = ImVec2(win_pos_x - win_size_x, win_pos_y + win_size_y - 5);
-	ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, IM_COL32((int)(orange_color.x * 255), (int)(orange_color.y * 255), (int)(orange_color.z * 255), (int)(orange_color.w * 255.f * (m_fading_out ? m_current_fade_opacity : 1.f))), 2.f);
+	ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, IM_COL32((int)(orange_color.x * 255), (int)(orange_color.y * 255), (int)(orange_color.z * 255), (int)(orange_color.picture_width * 255.f * (m_fading_out ? m_current_fade_opacity : 1.f))), 2.f);
 	if (!m_paused)
 		m_countdown_frame++;
 		*/
+}
+void NotificationManager::PopNotification::render_left_sign(ImGuiWrapper& imgui)
+{
+	if (m_data.level == NotificationLevel::ErrorNotification || m_data.level == NotificationLevel::WarningNotification) {
+		std::string text;
+		text = (m_data.level == NotificationLevel::ErrorNotification ? ImGui::ErrorMarker : ImGui::WarningMarker);
+		//float picture_width = ImGui::CalcTextSize(text.c_str()).x;
+		ImGui::SetCursorPosX(m_line_height / 3);
+		ImGui::SetCursorPosY(m_window_height / 2 - m_line_height / 2);
+		imgui.text(text.c_str());
+		
+		//m_left_indentation = picture_width + m_line_height /2;
+	} else {
+
+	}
 }
 void NotificationManager::PopNotification::on_text_click()
 {
@@ -509,7 +533,7 @@ void NotificationManager::SlicingCompleteLargeNotification::render_text(ImGuiWra
 		ImVec2 win_pos(win_pos_x, win_pos_y);
 
 		ImVec2 text1_size = ImGui::CalcTextSize(m_text1.c_str());
-		float x_offset = 20;
+		float x_offset = m_left_indentation;
 		std::string fulltext = m_text1 + m_hypertext + m_text2;
 		ImVec2 text_size = ImGui::CalcTextSize(fulltext.c_str());
 		float cursor_y = win_size.y / 2 - text_size.y / 2;

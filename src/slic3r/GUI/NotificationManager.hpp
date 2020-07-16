@@ -107,6 +107,7 @@ public:
 			                          const float text_x, const float text_y,
 		                              const std::string text,
 		                              bool more = false);
+		void         render_left_sign(ImGuiWrapper& imgui);
 		void         on_text_click();
 
 		const NotificationData m_data;
@@ -127,13 +128,13 @@ public:
 		bool             m_close_pending        { false }; // will go to m_finished next render
 		const float      m_window_height_base   = 56.0f;
 		const float      m_window_width_base    = 450.0f;
-		const float      m_window_width_offset  = 75.0f;
+		float            m_window_width_offset;
 		float            m_window_height        { 56.0f };  
 		float            m_window_width         { 450.0f };
 		float            m_top_x                { 0.0f };  // x coord where top of window is moving to
 		int              m_lines_count          { 1 };
+		float            m_left_indentation;
 		float            m_line_height;
-		float            m_line_spacing;
 		std::vector<int> m_endlines;
 		bool             m_is_gray              { false };
 		//if multiline = true, notification is showing all lines(>2)

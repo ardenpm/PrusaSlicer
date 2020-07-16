@@ -45,7 +45,9 @@ static const std::map<const char, std::string> font_icons = {
 	{ImGui::CloseIconMarker     , "cross"             },
 	{ImGui::CloseIconHoverMarker, "cross_focus_large" },
 	{ImGui::TimerDotMarker      , "timer_dot"         },
-    {ImGui::TimerDotEmptyMarker , "timer_dot_empty"   }
+    {ImGui::TimerDotEmptyMarker , "timer_dot_empty"   },
+	{ImGui::WarningMarker       , "flag_green"        },
+    {ImGui::ErrorMarker         , "flag_red"          }
 };
 
 ImGuiWrapper::ImGuiWrapper()

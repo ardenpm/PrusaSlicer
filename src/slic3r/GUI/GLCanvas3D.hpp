@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <memory>
 #include <chrono>
+#include <cstdint>
 
 #include "GLToolbar.hpp"
 #include "Event.hpp"
@@ -30,8 +31,9 @@ class wxPaintEvent;
 class wxGLCanvas;
 class wxGLContext;
 
-// Support for Retina OpenGL on Mac OS
-#define ENABLE_RETINA_GL __APPLE__
+// Support for Retina OpenGL on Mac OS.
+// wxGTK3 seems to simulate OSX behavior in regard to HiDPI scaling support, enable it as well.
+#define ENABLE_RETINA_GL (__APPLE__ || __WXGTK3__)
 
 namespace Slic3r {
 
@@ -72,6 +74,25 @@ public:
 };
 
 
+class RenderTimerEvent : public wxEvent
+{
+public:
+    RenderTimerEvent(wxEventType type, wxTimer& timer)
+        : wxEvent(timer.GetId(), type),
+        m_timer(&timer)
+    {
+        SetEventObject(timer.GetOwner());
+    }
+    int GetInterval() const { return m_timer->GetInterval(); }
+    wxTimer& GetTimer() const { return *m_timer; }
+
+    virtual wxEvent* Clone() const { return new RenderTimerEvent(*this); }
+    virtual wxEventCategory GetEventCategory() const  { return wxEVT_CATEGORY_TIMER; }
+private:
+    wxTimer* m_timer;
+};
+
+
 wxDECLARE_EVENT(EVT_GLCANVAS_OBJECT_SELECT, SimpleEvent);
 
 using Vec2dEvent = Event<Vec2d>;
@@ -103,7 +124,7 @@ wxDECLARE_EVENT(EVT_GLCANVAS_MOUSE_DRAGGING_FINISHED, SimpleEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_UPDATE_BED_SHAPE, SimpleEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_TAB, SimpleEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_RESETGIZMOS, SimpleEvent);
-wxDECLARE_EVENT(EVT_GLCANVAS_MOVE_LAYERS_SLIDER, wxKeyEvent);
+wxDECLARE_EVENT(EVT_GLCANVAS_MOVE_SLIDERS, wxKeyEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_EDIT_COLOR_CHANGE, wxKeyEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_JUMP_TO, wxKeyEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_UNDO, SimpleEvent);
@@ -113,6 +134,7 @@ wxDECLARE_EVENT(EVT_GLCANVAS_RESET_LAYER_HEIGHT_PROFILE, SimpleEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_ADAPTIVE_LAYER_HEIGHT_PROFILE, Event<float>);
 wxDECLARE_EVENT(EVT_GLCANVAS_SMOOTH_LAYER_HEIGHT_PROFILE, HeightProfileSmoothEvent);
 wxDECLARE_EVENT(EVT_GLCANVAS_RELOAD_FROM_DISK, SimpleEvent);
+wxDECLARE_EVENT(EVT_GLCANVAS_RENDER_TIMER, wxTimerEvent/*RenderTimerEvent*/);
 
 class GLCanvas3D
 {
@@ -276,6 +298,15 @@ class GLCanvas3D
         bool matches(double z) const { return this->z == z; }
     };
 
+#if ENABLE_WARNING_TEXTURE_REMOVAL
+    enum class EWarning {
+        ObjectOutside,
+        ToolpathOutside,
+        SlaSupportsOutside,
+        SomethingNotShown,
+        ObjectClashed
+    };
+#else
     class WarningTexture : public GUI::GLTexture
     {
     public:
@@ -314,13 +345,25 @@ class GLCanvas3D
         // Generates the texture with given text.
         bool generate(const std::string& msg, const GLCanvas3D& canvas, bool compress, bool red_colored = false);
     };
+#endif // ENABLE_WARNING_TEXTURE_REMOVAL
 
 #if ENABLE_RENDER_STATISTICS
-    struct RenderStats
+    class RenderStats
     {
-        long long last_frame;
+        std::queue<std::pair<int64_t, int64_t>> m_frames;
+        int64_t m_curr_total{ 0 };
 
-        RenderStats() : last_frame(0) {}
+    public:
+        void add_frame(int64_t frame) {
+            int64_t now = GLCanvas3D::timestamp_now();
+            if (!m_frames.empty() && now - m_frames.front().first > 1000) {
+                m_curr_total -= m_frames.front().second;
+                m_frames.pop();
+            }
+            m_curr_total += frame;
+            m_frames.push({ now, frame });
+        }
+        int64_t get_average() const { return m_frames.empty() ? 0 : m_curr_total / m_frames.size(); }
     };
 #endif // ENABLE_RENDER_STATISTICS
 
@@ -357,12 +400,10 @@ class GLCanvas3D
     class Slope
     {
         bool m_enabled{ false };
-        bool m_dialog_shown{ false };
-        GLCanvas3D& m_canvas;
         GLVolumeCollection& m_volumes;
         static float s_window_width;
     public:
-        Slope(GLCanvas3D& canvas, GLVolumeCollection& volumes) : m_canvas(canvas), m_volumes(volumes) {}
+        Slope(GLVolumeCollection& volumes) : m_volumes(volumes) {}
 
         void enable(bool enable) { m_enabled = enable; }
         bool is_enabled() const { return m_enabled; }
@@ -374,6 +415,11 @@ class GLCanvas3D
         static float get_window_width() { return s_window_width; };
     };
 
+    class RenderTimer : public wxTimer {
+    private:
+        virtual void Notify() override;
+    };
+
 public:
     enum ECursorType : unsigned char
     {
@@ -383,9 +429,11 @@ public:
 
     struct ArrangeSettings
     {
-        float distance         = 6.;
-        float accuracy         = 0.65f;
-        bool  enable_rotation  = false;
+        float distance           = 6.;
+//        float distance_seq_print = 6.;    // Used when sequential print is ON
+//        float distance_sla       = 6.;
+        float accuracy           = 0.65f; // Unused currently
+        bool  enable_rotation    = false;
     };
 
 private:
@@ -395,7 +443,9 @@ private:
     std::unique_ptr<RetinaHelper> m_retina_helper;
 #endif
     bool m_in_render;
+#if !ENABLE_WARNING_TEXTURE_REMOVAL
     WarningTexture m_warning_texture;
+#endif // !ENABLE_WARNING_TEXTURE_REMOVAL
     wxTimer m_timer;
     LayersEditing m_layers_editing;
     Mouse m_mouse;
@@ -409,11 +459,15 @@ private:
     std::string m_sidebar_field;
     // when true renders an extra frame by not resetting m_dirty to false
     // see request_extra_frame()
-    bool m_extra_frame_requested;
+    bool m_extra_frame_requested; 
+    int  m_extra_frame_requested_delayed { std::numeric_limits<int>::max() };
     bool m_event_handlers_bound{ false };
 
     mutable GLVolumeCollection m_volumes;
     GCodeViewer m_gcode_viewer;
+
+    RenderTimer m_render_timer;
+    int64_t     m_render_timer_start;
 
     Selection m_selection;
     const DynamicPrintConfig* m_config;
@@ -459,7 +513,35 @@ private:
     mutable bool m_tooltip_enabled{ true };
     Slope m_slope;
 
-    ArrangeSettings m_arrange_settings;
+    ArrangeSettings m_arrange_settings_fff, m_arrange_settings_sla,
+        m_arrange_settings_fff_seq_print;
+
+    PrinterTechnology current_printer_technology() const;
+
+    template<class Self>
+    static auto & get_arrange_settings(Self *self)
+    {
+        PrinterTechnology ptech = self->current_printer_technology();
+
+        auto *ptr = &self->m_arrange_settings_fff;
+
+        if (ptech == ptSLA) {
+            ptr = &self->m_arrange_settings_sla;
+        } else if (ptech == ptFFF) {
+            auto co_opt = self->m_config->template option<ConfigOptionBool>("complete_objects");
+            if (co_opt && co_opt->value) {
+                ptr = &self->m_arrange_settings_fff_seq_print;
+            } else {
+                ptr = &self->m_arrange_settings_fff;
+            }
+        }
+
+        return *ptr;
+    }
+
+    ArrangeSettings &get_arrange_settings() { return get_arrange_settings(this); }
+
+    void load_arrange_settings();
 
 public:
     explicit GLCanvas3D(wxGLCanvas* canvas);
@@ -489,7 +571,7 @@ public:
     void toggle_sla_auxiliaries_visibility(bool visible, const ModelObject* mo = nullptr, int instance_idx = -1);
     void toggle_model_objects_visibility(bool visible, const ModelObject* mo = nullptr, int instance_idx = -1);
     void update_instance_printable_state_for_object(size_t obj_idx);
-    void update_instance_printable_state_for_objects(std::vector<size_t>& object_idxs);
+    void update_instance_printable_state_for_objects(const std::vector<size_t>& object_idxs);
 
     void set_config(const DynamicPrintConfig* config);
     void set_process(BackgroundSlicingProcess* process);
@@ -504,10 +586,8 @@ public:
 
     void bed_shape_changed();
 
-    void set_clipping_plane(unsigned int id, const ClippingPlane& plane)
-    {
-        if (id < 2)
-        {
+    void set_clipping_plane(unsigned int id, const ClippingPlane& plane) {
+        if (id < 2) {
             m_clipping_planes[id] = plane;
             m_sla_caps[id].reset();
         }
@@ -576,7 +656,6 @@ public:
     void set_toolpath_view_type(GCodeViewer::EViewType type);
     void set_volumes_z_range(const std::array<double, 2>& range);
     void set_toolpaths_z_range(const std::array<unsigned int, 2>& range);
-    void set_toolpaths_range(double low, double high);
 
     std::vector<int> load_object(const ModelObject& model_object, int obj_idx, std::vector<int> instance_idxs);
     std::vector<int> load_object(const Model& model, int obj_idx);
@@ -587,6 +666,7 @@ public:
 
     void load_gcode_preview(const GCodeProcessor::Result& gcode_result);
     void refresh_gcode_preview(const GCodeProcessor::Result& gcode_result, const std::vector<std::string>& str_tool_colors);
+    void refresh_gcode_preview_render_paths();
     void set_gcode_view_preview_type(GCodeViewer::EViewType type) { return m_gcode_viewer.set_view_type(type); }
     GCodeViewer::EViewType get_gcode_view_preview_type() const { return m_gcode_viewer.get_view_type(); }
     void load_sla_preview();
@@ -600,6 +680,7 @@ public:
     void on_key(wxKeyEvent& evt);
     void on_mouse_wheel(wxMouseEvent& evt);
     void on_timer(wxTimerEvent& evt);
+    void on_render_timer(wxTimerEvent& evt);
     void on_mouse(wxMouseEvent& evt);
     void on_paint(wxPaintEvent& evt);
     void on_set_focus(wxFocusEvent& evt);
@@ -631,8 +712,8 @@ public:
     class WipeTowerInfo {
     protected:
         Vec2d m_pos = {std::nan(""), std::nan("")};
-        Vec2d m_bb_size = {0., 0.};
         double m_rotation = 0.;
+        BoundingBoxf m_bb;
         friend class GLCanvas3D;
     public:
         
@@ -643,7 +724,7 @@ public:
         
         inline const Vec2d& pos() const { return m_pos; }
         inline double rotation() const { return m_rotation; }
-        inline const Vec2d bb_size() const { return m_bb_size; }
+        inline const Vec2d bb_size() const { return m_bb.size(); }
         
         void apply_wipe_tower() const;
     };
@@ -662,6 +743,7 @@ public:
     void msw_rescale();
 
     void request_extra_frame() { m_extra_frame_requested = true; }
+    void request_extra_frame_delayed(int miliseconds);
 
     int get_main_toolbar_item_id(const std::string& name) const { return m_main_toolbar.get_item_id(name); }
     void force_main_toolbar_left_action(int item_id) { m_main_toolbar.force_left_action(item_id, *this); }
@@ -680,7 +762,28 @@ public:
     void use_slope(bool use) { m_slope.use(use); }
     void set_slope_normal_angle(float angle_in_deg) { m_slope.set_normal_angle(angle_in_deg); }
 
-    const ArrangeSettings& get_arrange_settings() const { return m_arrange_settings; }
+    ArrangeSettings get_arrange_settings() const
+    {
+        const ArrangeSettings &settings = get_arrange_settings(this);
+        ArrangeSettings ret = settings;
+        if (&settings == &m_arrange_settings_fff_seq_print) {
+            ret.distance = std::max(ret.distance,
+                                    float(min_object_distance(*m_config)));
+        }
+
+        return ret;
+    }
+
+    // Timestamp for FPS calculation and notification fade-outs.
+    static int64_t timestamp_now() {
+#ifdef _WIN32
+        // Cheaper on Windows, calls GetSystemTimeAsFileTime()
+        return wxGetUTCTimeMillis().GetValue();
+#else
+        // calls clock()
+        return wxGetLocalTimeMillis().GetValue();
+#endif
+    }
 
 private:
     bool _is_shown_on_screen() const;
@@ -713,7 +816,9 @@ private:
 #endif // ENABLE_RENDER_SELECTION_CENTER
     void _check_and_update_toolbar_icon_scale() const;
     void _render_overlays() const;
+#if !ENABLE_WARNING_TEXTURE_REMOVAL
     void _render_warning_texture() const;
+#endif // !ENABLE_WARNING_TEXTURE_REMOVAL
     void _render_volumes_for_picking() const;
     void _render_current_gizmo() const;
     void _render_gizmos_overlay() const;
@@ -766,10 +871,17 @@ private:
 	void _load_sla_shells();
     void _update_toolpath_volumes_outside_state();
     void _update_sla_shells_outside_state();
+#if ENABLE_WARNING_TEXTURE_REMOVAL
+    void _set_warning_notification_if_needed(EWarning warning);
+
+    // generates a warning notification containing the given message
+    void _set_warning_notification(EWarning warning, bool state);
+#else
     void _show_warning_texture_if_needed(WarningTexture::Warning warning);
 
     // generates a warning texture containing the given message
     void _set_warning_texture(WarningTexture::Warning warning, bool state);
+#endif // ENABLE_WARNING_TEXTURE_REMOVAL
 
     bool _is_any_volume_outside() const;
 

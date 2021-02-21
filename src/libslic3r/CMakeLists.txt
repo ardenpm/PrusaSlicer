@@ -21,6 +21,8 @@ add_library(libslic3r STATIC
     BoundingBox.hpp
     BridgeDetector.cpp
     BridgeDetector.hpp
+    Brim.cpp
+    Brim.hpp
     ClipperUtils.cpp
     ClipperUtils.hpp
     Config.cpp
@@ -99,6 +101,8 @@ add_library(libslic3r STATIC
     GCode/WipeTower.hpp
     GCode/GCodeProcessor.cpp
     GCode/GCodeProcessor.hpp
+    GCode/AvoidCrossingPerimeters.cpp
+    GCode/AvoidCrossingPerimeters.hpp
     GCode.cpp
     GCode.hpp
     GCodeReader.cpp
@@ -118,6 +122,8 @@ add_library(libslic3r STATIC
     "${CMAKE_CURRENT_BINARY_DIR}/libslic3r_version.h"
     Line.cpp
     Line.hpp
+    LibraryCheck.cpp
+    LibraryCheck.hpp
     Model.cpp
     Model.hpp
     ModelArrange.hpp
@@ -126,8 +132,6 @@ add_library(libslic3r STATIC
     CustomGCode.hpp
     Arrange.hpp
     Arrange.cpp
-    MotionPlanner.cpp
-    MotionPlanner.hpp
     MultiPoint.cpp
     MultiPoint.hpp
     MutablePriorityQueue.hpp
@@ -159,8 +163,8 @@ add_library(libslic3r STATIC
     PrintConfig.hpp
     PrintObject.cpp
     PrintRegion.cpp
-    PNGRead.hpp
-    PNGRead.cpp
+    PNGReadWrite.hpp
+    PNGReadWrite.cpp
     Semver.cpp
     ShortestPath.cpp
     ShortestPath.hpp
@@ -305,8 +309,6 @@ target_link_libraries(libslic3r
     nowide
     ${EXPAT_LIBRARIES}
     glu-libtess
-    polypartition
-    poly2tri
     qhull
     semver
     TBB::tbb

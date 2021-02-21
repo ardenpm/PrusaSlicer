@@ -13,6 +13,11 @@
 namespace Slic3r
 {
 
+void PrintTryCancel::operator()()
+{
+    m_print->throw_if_canceled();
+}
+
 size_t PrintStateBase::g_last_timestamp = 0;
 
 // Update "scale", "input_filename", "input_filename_base" placeholders from the current m_objects.
@@ -69,7 +74,7 @@ std::string PrintBase::output_filename(const std::string &format, const std::str
             filename = boost::filesystem::change_extension(filename, default_ext);
         return filename.string();
     } catch (std::runtime_error &err) {
-        throw Slic3r::RuntimeError(L("Failed processing of the output_filename_format template.") + "\n" + err.what());
+        throw Slic3r::PlaceholderParserError(L("Failed processing of the output_filename_format template.") + "\n" + err.what());
     }
 }
 

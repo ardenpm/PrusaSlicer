@@ -68,6 +68,15 @@ void AppConfig::set_defaults()
         if (get("export_sources_full_pathnames").empty())
             set("export_sources_full_pathnames", "0");
 
+#if ENABLE_CUSTOMIZABLE_FILES_ASSOCIATION_ON_WIN
+#ifdef _WIN32
+        if (get("associate_3mf").empty())
+            set("associate_3mf", "0");
+        if (get("associate_stl").empty())
+            set("associate_stl", "0");
+#endif // _WIN32
+#endif // ENABLE_CUSTOMIZABLE_FILES_ASSOCIATION_ON_WIN
+
         // remove old 'use_legacy_opengl' parameter from this config, if present
         if (!get("use_legacy_opengl").empty())
             erase("", "use_legacy_opengl");
@@ -108,10 +117,32 @@ void AppConfig::set_defaults()
 
         if (get("use_inches").empty())
             set("use_inches", "0");
+
+        if (get("default_action_on_close_application").empty())
+            set("default_action_on_close_application", "none"); // , "discard" or "save" 
+
+        if (get("default_action_on_select_preset").empty())
+            set("default_action_on_select_preset", "none");     // , "transfer", "discard" or "save" 
+
+        if (get("color_mapinulation_panel").empty())
+            set("color_mapinulation_panel", "0");
     }
+#if ENABLE_CUSTOMIZABLE_FILES_ASSOCIATION_ON_WIN
+    else {
+#ifdef _WIN32
+        if (get("associate_gcode").empty())
+            set("associate_gcode", "0");
+#endif // _WIN32
+    }
+#endif // ENABLE_CUSTOMIZABLE_FILES_ASSOCIATION_ON_WIN
 
     if (get("seq_top_layer_only").empty())
         set("seq_top_layer_only", "1");
+
+#if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
+    if (get("seq_top_gcode_indices").empty())
+        set("seq_top_gcode_indices", "1");
+#endif // ENABLE_GCODE_LINES_ID_IN_H_SLIDER
 
     if (get("use_perspective_camera").empty())
         set("use_perspective_camera", "1");
@@ -125,11 +156,12 @@ void AppConfig::set_defaults()
     if (get("show_splash_screen").empty())
         set("show_splash_screen", "1");
 
-    if (get("default_action_on_close_application").empty())
-        set("default_action_on_close_application", "none"); // , "discard" or "save" 
-
-    if (get("default_action_on_select_preset").empty())
-        set("default_action_on_select_preset", "none");     // , "transfer", "discard" or "save" 
+#if ENABLE_CTRL_M_ON_WINDOWS
+#ifdef _WIN32
+    if (get("use_legacy_3DConnexion").empty())
+        set("use_legacy_3DConnexion", "0");
+#endif // _WIN32
+#endif // ENABLE_CTRL_M_ON_WINDOWS
 
     // Remove legacy window positions/sizes
     erase("", "main_frame_maximized");
@@ -242,14 +274,14 @@ void AppConfig::save()
     else
         c << "# " << Slic3r::header_gcodeviewer_generated() << std::endl;
     // Make sure the "no" category is written first.
-    for (const std::pair<std::string, std::string> &kvp : m_storage[""])
+    for (const auto& kvp : m_storage[""])
         c << kvp.first << " = " << kvp.second << std::endl;
     // Write the other categories.
-    for (const auto category : m_storage) {
+    for (const auto& category : m_storage) {
     	if (category.first.empty())
     		continue;
     	c << std::endl << "[" << category.first << "]" << std::endl;
-    	for (const std::pair<std::string, std::string> &kvp : category.second)
+        for (const auto& kvp : category.second)
 	        c << kvp.first << " = " << kvp.second << std::endl;
 	}
     // Write vendor sections
@@ -371,7 +403,7 @@ std::vector<std::string> AppConfig::get_mouse_device_names() const
     static constexpr const char   *prefix     = "mouse_device:";
     static const size_t  prefix_len = strlen(prefix);
     std::vector<std::string> out;
-    for (const std::pair<std::string, std::map<std::string, std::string>>& key_value_pair : m_storage)
+    for (const auto& key_value_pair : m_storage)
         if (boost::starts_with(key_value_pair.first, prefix) && key_value_pair.first.size() > prefix_len)
             out.emplace_back(key_value_pair.first.substr(prefix_len));
     return out;

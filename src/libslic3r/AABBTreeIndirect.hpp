@@ -653,8 +653,8 @@ inline bool intersect_ray_all_hits(
 	std::vector<igl::Hit> 				&hits)
 {
     auto ray_intersector = detail::RayIntersectorHits<VertexType, IndexedFaceType, TreeType, VectorType> {
-		vertices, faces, tree,
-        origin, dir, VectorType(dir.cwiseInverse())
+        { vertices, faces, {tree},
+        origin, dir, VectorType(dir.cwiseInverse()) }
 	};
 	if (! tree.empty()) {
         ray_intersector.hits.reserve(8);
@@ -725,6 +725,33 @@ inline bool is_any_triangle_in_radius(
 
     return hit_point.allFinite();
 }
+
+
+// Traverse the tree and return the index of an entity whose bounding box
+// contains a given point. Returns size_t(-1) when the point is outside.
+template<typename TreeType, typename VectorType>
+void get_candidate_idxs(const TreeType& tree, const VectorType& v, std::vector<size_t>& candidates, size_t node_idx = 0)
+{
+    if (tree.empty() || ! tree.node(node_idx).bbox.contains(v))
+        return;
+
+    decltype(tree.node(node_idx)) node = tree.node(node_idx);
+    static_assert(std::is_reference<decltype(node)>::value,
+                  "Nodes shall be addressed by reference.");
+    assert(node.is_valid());
+    assert(node.bbox.contains(v));
+
+    if (! node.is_leaf()) {
+        if (tree.left_child(node_idx).bbox.contains(v))
+            get_candidate_idxs(tree, v, candidates, tree.left_child_idx(node_idx));
+        if (tree.right_child(node_idx).bbox.contains(v))
+            get_candidate_idxs(tree, v, candidates, tree.right_child_idx(node_idx));
+    } else
+        candidates.push_back(node.idx);
+
+    return;
+}
+
 
 } // namespace AABBTreeIndirect
 } // namespace Slic3r

@@ -73,7 +73,7 @@ public:
 
     // Collect 0-based extruder indices used to print this region's object.
 	void                        collect_object_printing_extruders(std::vector<unsigned int> &object_extruders) const;
-	static void                 collect_object_printing_extruders(const PrintConfig &print_config, const PrintRegionConfig &region_config, std::vector<unsigned int> &object_extruders);
+	static void                 collect_object_printing_extruders(const PrintConfig &print_config, const PrintRegionConfig &region_config, const bool has_brim, std::vector<unsigned int> &object_extruders);
 
 // Methods modifying the PrintRegion's state:
 public:
@@ -95,9 +95,39 @@ private:
     ~PrintRegion() = default;
 };
 
+template<typename T>
+class ConstVectorOfPtrsAdaptor {
+public:
+    // Returning a non-const pointer to const pointers to T.
+    T * const *             begin() const { return m_data->data(); }
+    T * const *             end()   const { return m_data->data() + m_data->size(); }
+    const T*                front() const { return m_data->front(); }
+    const T*                back()  const { return m_data->front(); }
+    size_t                  size()  const { return m_data->size(); }
+    bool                    empty() const { return m_data->empty(); }
+    const T*                operator[](size_t i) const { return (*m_data)[i]; }
+    const T*                at(size_t i) const { return m_data->at(i); }
+    std::vector<const T*>   vector() const { return std::vector<const T*>(this->begin(), this->end()); }
+protected:
+    ConstVectorOfPtrsAdaptor(const std::vector<T*> *data) : m_data(data) {}
+private:
+    const std::vector<T*> *m_data;
+};
 
-typedef std::vector<Layer*> LayerPtrs;
-typedef std::vector<SupportLayer*> SupportLayerPtrs;
+typedef std::vector<Layer*>       LayerPtrs;
+typedef std::vector<const Layer*> ConstLayerPtrs;
+class ConstLayerPtrsAdaptor : public ConstVectorOfPtrsAdaptor<Layer> {
+    friend PrintObject;
+    ConstLayerPtrsAdaptor(const LayerPtrs *data) : ConstVectorOfPtrsAdaptor<Layer>(data) {}
+};
+
+typedef std::vector<SupportLayer*>        SupportLayerPtrs;
+typedef std::vector<const SupportLayer*>  ConstSupportLayerPtrs;
+class ConstSupportLayerPtrsAdaptor : public ConstVectorOfPtrsAdaptor<SupportLayer> {
+    friend PrintObject;
+    ConstSupportLayerPtrsAdaptor(const SupportLayerPtrs *data) : ConstVectorOfPtrsAdaptor<SupportLayer>(data) {}
+};
+
 class BoundingBoxf3;        // TODO: for temporary constructor parameter
 
 // Single instance of a PrintObject.
@@ -125,12 +155,16 @@ public:
     std::vector<std::vector<std::pair<t_layer_height_range, int>>> region_volumes;
 
     // Size of an object: XYZ in scaled coordinates. The size might not be quite snug in XY plane.
-    const Vec3crd&          size() const			{ return m_size; }
-    const PrintObjectConfig& config() const         { return m_config; }    
-    const LayerPtrs&        layers() const          { return m_layers; }
-    const SupportLayerPtrs& support_layers() const  { return m_support_layers; }
-    const Transform3d&      trafo() const           { return m_trafo; }
-    const PrintInstances&   instances() const       { return m_instances; }
+    const Vec3crd&               size() const			{ return m_size; }
+    const PrintObjectConfig&     config() const         { return m_config; }    
+    ConstLayerPtrsAdaptor        layers() const         { return ConstLayerPtrsAdaptor(&m_layers); }
+    ConstSupportLayerPtrsAdaptor support_layers() const { return ConstSupportLayerPtrsAdaptor(&m_support_layers); }
+    const Transform3d&           trafo() const          { return m_trafo; }
+    const PrintInstances&        instances() const      { return m_instances; }
+
+    // Whoever will get a non-const pointer to PrintObject will be able to modify its layers.
+    LayerPtrs&                   layers()               { return m_layers; }
+    SupportLayerPtrs&            support_layers()       { return m_support_layers; }
 
     // Bounding box is used to align the object infill patterns, and to calculate attractor for the rear seam.
     // The bounding box may not be quite snug.
@@ -161,6 +195,8 @@ public:
     // Get a layer approximately at print_z.
     const Layer*	get_layer_at_printz(coordf_t print_z, coordf_t epsilon) const;
     Layer*			get_layer_at_printz(coordf_t print_z, coordf_t epsilon);
+    // Get the first layer approximately bellow print_z.
+    const Layer*	get_first_layer_bellow_printz(coordf_t print_z, coordf_t epsilon) const;
 
     // print_z: top of the layer; slice_z: center of the layer.
     Layer* add_layer(int id, coordf_t height, coordf_t print_z, coordf_t slice_z);
@@ -169,7 +205,7 @@ public:
     void clear_support_layers();
     SupportLayer* get_support_layer(int idx) { return m_support_layers[idx]; }
     SupportLayer* add_support_layer(int id, coordf_t height, coordf_t print_z);
-    SupportLayerPtrs::const_iterator insert_support_layer(SupportLayerPtrs::const_iterator pos, size_t id, coordf_t height, coordf_t print_z, coordf_t slice_z);
+    SupportLayerPtrs::iterator insert_support_layer(SupportLayerPtrs::iterator pos, size_t id, coordf_t height, coordf_t print_z, coordf_t slice_z);
     void delete_support_layer(int idx);
     
     // Initialize the layer_height_profile from the model_object's layer_height_profile, from model_object's layer height table, or from slicing parameters.
@@ -186,7 +222,7 @@ public:
     // returns 0-based indices of extruders used to print the object (without brim, support and other helper extrusions)
     std::vector<unsigned int>   object_extruders() const;
 
-    // Called when slicing to SVG (see Print.pm sub export_svg), and used by perimeters.t
+    // Called by make_perimeters()
     void slice();
 
     // Helpers to slice support enforcer / blocker meshes by the support generator.
@@ -212,7 +248,9 @@ private:
     // Invalidates all PrintObject and Print steps.
     bool                    invalidate_all_steps();
     // Invalidate steps based on a set of parameters changed.
-    bool                    invalidate_state_by_config_options(const std::vector<t_config_option_key> &opt_keys);
+    // It may be called for both the PrintObjectConfig and PrintRegionConfig.
+    bool                    invalidate_state_by_config_options(
+        const ConfigOptionResolver &old_config, const ConfigOptionResolver &new_config, const std::vector<t_config_option_key> &opt_keys);
     // If ! m_slicing_params.valid, recalculate.
     void                    update_slicing_parameters();
 
@@ -259,9 +297,16 @@ private:
     // so that next call to make_perimeters() performs a union() before computing loops
     bool                    				m_typed_slices = false;
 
-    std::vector<ExPolygons> slice_region(size_t region_id, const std::vector<float> &z, SlicingMode mode) const;
+    std::vector<ExPolygons> slice_region(size_t region_id, const std::vector<float> &z, SlicingMode mode, size_t slicing_mode_normal_below_layer, SlicingMode mode_below) const;
+    std::vector<ExPolygons> slice_region(size_t region_id, const std::vector<float> &z, SlicingMode mode) const
+        { return this->slice_region(region_id, z, mode, 0, mode); }
     std::vector<ExPolygons> slice_modifiers(size_t region_id, const std::vector<float> &z) const;
-    std::vector<ExPolygons> slice_volumes(const std::vector<float> &z, SlicingMode mode, const std::vector<const ModelVolume*> &volumes) const;
+    std::vector<ExPolygons> slice_volumes(
+        const std::vector<float> &z, 
+        SlicingMode mode, size_t slicing_mode_normal_below_layer, SlicingMode mode_below, 
+        const std::vector<const ModelVolume*> &volumes) const;
+    std::vector<ExPolygons> slice_volumes(const std::vector<float> &z, SlicingMode mode, const std::vector<const ModelVolume*> &volumes) const
+        { return this->slice_volumes(z, mode, 0, mode, volumes); }
     std::vector<ExPolygons> slice_volume(const std::vector<float> &z, SlicingMode mode, const ModelVolume &volume) const;
     std::vector<ExPolygons> slice_volume(const std::vector<float> &z, const std::vector<t_layer_height_range> &ranges, SlicingMode mode, const ModelVolume &volume) const;
 };
@@ -335,14 +380,27 @@ struct PrintStatistics
     }
 };
 
-typedef std::vector<PrintObject*> PrintObjectPtrs;
-typedef std::vector<PrintRegion*> PrintRegionPtrs;
+typedef std::vector<PrintObject*>       PrintObjectPtrs;
+typedef std::vector<const PrintObject*> ConstPrintObjectPtrs;
+class ConstPrintObjectPtrsAdaptor : public ConstVectorOfPtrsAdaptor<PrintObject> {
+    friend Print;
+    ConstPrintObjectPtrsAdaptor(const PrintObjectPtrs *data) : ConstVectorOfPtrsAdaptor<PrintObject>(data) {}
+};
+
+typedef std::vector<PrintRegion*>       PrintRegionPtrs;
+typedef std::vector<const PrintRegion*> ConstPrintRegionPtrs;
+class ConstPrintRegionPtrsAdaptor : public ConstVectorOfPtrsAdaptor<PrintRegion> {
+    friend Print;
+    ConstPrintRegionPtrsAdaptor(const PrintRegionPtrs *data) : ConstVectorOfPtrsAdaptor<PrintRegion>(data) {}
+};
 
 // The complete print tray with possibly multiple objects.
 class Print : public PrintBaseWithState<PrintStep, psCount>
 {
 private: // Prevents erroneous use by other classes.
     typedef PrintBaseWithState<PrintStep, psCount> Inherited;
+    // Bool indicates if supports of PrintObject are top-level contour.
+    typedef std::pair<PrintObject *, bool>         PrintObjectInfo;
 
 public:
     Print() = default;
@@ -376,6 +434,7 @@ public:
 
     bool                has_infinite_skirt() const;
     bool                has_skirt() const;
+    bool                has_brim() const;
 
     // Returns an empty string if valid, otherwise returns an error message.
     std::string         validate() const override;
@@ -394,9 +453,8 @@ public:
     const PrintConfig&          config() const { return m_config; }
     const PrintObjectConfig&    default_object_config() const { return m_default_object_config; }
     const PrintRegionConfig&    default_region_config() const { return m_default_region_config; }
-    //FIXME returning const vector to non-const PrintObject*, caller could modify PrintObjects!
-    const PrintObjectPtrs&      objects() const { return m_objects; }
-    PrintObject*                get_object(size_t idx) { return m_objects[idx]; }
+    ConstPrintObjectPtrsAdaptor objects() const { return ConstPrintObjectPtrsAdaptor(&m_objects); }
+    PrintObject*                get_object(size_t idx) { return const_cast<PrintObject*>(m_objects[idx]); }
     const PrintObject*          get_object(size_t idx) const { return m_objects[idx]; }
     // PrintObject by its ObjectID, to be used to uniquely bind slicing warnings to their source PrintObjects
     // in the notification center.
@@ -405,10 +463,14 @@ public:
             [object_id](const PrintObject *obj) { return obj->id() == object_id; });
         return (it == m_objects.end()) ? nullptr : *it;
     }
-    const PrintRegionPtrs&      regions() const { return m_regions; }
+    ConstPrintRegionPtrsAdaptor regions() const { return ConstPrintRegionPtrsAdaptor(&m_regions); }
     // How many of PrintObject::copies() over all print objects are there?
     // If zero, then the print is empty and the print shall not be executed.
     unsigned int                num_object_instances() const;
+
+    // For Perl bindings. 
+    PrintObjectPtrs&            objects_mutable() { return m_objects; }
+    PrintRegionPtrs&            regions_mutable() { return m_regions; }
 
     const ExtrusionEntityCollection& skirt() const { return m_skirt; }
     const ExtrusionEntityCollection& brim() const { return m_brim; }
@@ -449,10 +511,9 @@ private:
 		t_config_option_keys &full_config_diff, 
 		DynamicPrintConfig &filament_overrides) const;
 
-    bool                invalidate_state_by_config_options(const std::vector<t_config_option_key> &opt_keys);
+    bool                invalidate_state_by_config_options(const ConfigOptionResolver &new_config, const std::vector<t_config_option_key> &opt_keys);
 
     void                _make_skirt();
-    void                _make_brim();
     void                _make_wipe_tower();
     void                finalize_first_layer_convex_hull();
 

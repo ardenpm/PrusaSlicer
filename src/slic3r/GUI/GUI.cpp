@@ -35,7 +35,7 @@ void disable_screensaver()
 {
     #if __APPLE__
     CFStringRef reasonForActivity = CFSTR("Slic3r");
-    IOReturn success = IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep, 
+    [[maybe_unused]]IOReturn success = IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep,
         kIOPMAssertionLevelOn, reasonForActivity, &assertionID); 
     // ignore result: success == kIOReturnSuccess
     #elif _WIN32
@@ -46,7 +46,7 @@ void disable_screensaver()
 void enable_screensaver()
 {
     #if __APPLE__
-    IOReturn success = IOPMAssertionRelease(assertionID);
+    IOPMAssertionRelease(assertionID);
     #elif _WIN32
     SetThreadExecutionState(ES_CONTINUOUS);
     #endif
@@ -182,6 +182,8 @@ void change_opt_value(DynamicPrintConfig& config, const t_config_option_key& opt
 				config.set_key_value(opt_key, new ConfigOptionEnum<InfillPattern>(boost::any_cast<InfillPattern>(value))); 
 			else if (opt_key.compare("ironing_type") == 0)
 				config.set_key_value(opt_key, new ConfigOptionEnum<IroningType>(boost::any_cast<IroningType>(value))); 
+			else if (opt_key.compare("fuzzy_skin") == 0)
+				config.set_key_value(opt_key, new ConfigOptionEnum<FuzzySkinType>(boost::any_cast<FuzzySkinType>(value))); 
 			else if (opt_key.compare("gcode_flavor") == 0)
 				config.set_key_value(opt_key, new ConfigOptionEnum<GCodeFlavor>(boost::any_cast<GCodeFlavor>(value))); 
 			else if (opt_key.compare("machine_limits_usage") == 0)
@@ -198,10 +200,12 @@ void change_opt_value(DynamicPrintConfig& config, const t_config_option_key& opt
                 config.set_key_value(opt_key, new ConfigOptionEnum<SLAPillarConnectionMode>(boost::any_cast<SLAPillarConnectionMode>(value)));
             else if(opt_key == "printhost_authorization_type")
                 config.set_key_value(opt_key, new ConfigOptionEnum<AuthorizationType>(boost::any_cast<AuthorizationType>(value)));
+            else if(opt_key == "brim_type")
+                config.set_key_value(opt_key, new ConfigOptionEnum<BrimType>(boost::any_cast<BrimType>(value)));
 			}
 			break;
 		case coPoints:{
-			if (opt_key.compare("bed_shape") == 0) {
+			if (opt_key == "bed_shape" || opt_key == "thumbnails") {
 				config.option<ConfigOptionPoints>(opt_key)->values = boost::any_cast<std::vector<Vec2d>>(value);
 				break;
 			}
@@ -221,16 +225,16 @@ void change_opt_value(DynamicPrintConfig& config, const t_config_option_key& opt
 	}
 }
 
-void show_error(wxWindow* parent, const wxString& message)
+void show_error(wxWindow* parent, const wxString& message, bool monospaced_font)
 {
-	ErrorDialog msg(parent, message);
+	ErrorDialog msg(parent, message, monospaced_font);
 	msg.ShowModal();
 }
 
-void show_error(wxWindow* parent, const char* message)
+void show_error(wxWindow* parent, const char* message, bool monospaced_font)
 {
 	assert(message);
-	show_error(parent, wxString::FromUTF8(message));
+	show_error(parent, wxString::FromUTF8(message), monospaced_font);
 }
 
 void show_error_id(int id, const std::string& message)

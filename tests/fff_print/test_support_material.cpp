@@ -23,10 +23,11 @@ SCENARIO("SupportMaterial: support_layers_z and contact_distance", "[SupportMate
     // Box h = 20mm, hole bottom at 5mm, hole height 10mm (top edge at 15mm).
     TriangleMesh mesh = Slic3r::Test::mesh(Slic3r::Test::TestMesh::cube_with_hole);
     mesh.rotate_x(float(M_PI / 2));
+//    mesh.write_binary("d:\\temp\\cube_with_hole.stl");
 
 	auto check = [](Slic3r::Print &print, bool &first_support_layer_height_ok, bool &layer_height_minimum_ok, bool &layer_height_maximum_ok, bool &top_spacing_ok)
 	{
-		const std::vector<Slic3r::SupportLayer*> &support_layers = print.objects().front()->support_layers();
+        ConstSupportLayerPtrsAdaptor support_layers = print.objects().front()->support_layers();
 
 		first_support_layer_height_ok = support_layers.front()->print_z == print.default_object_config().first_layer_height.value;
 
@@ -76,7 +77,8 @@ SCENARIO("SupportMaterial: support_layers_z and contact_distance", "[SupportMate
 				{ "support_material",	1 },
 				{ "layer_height",		0.2 },
 				{ "first_layer_height", 0.4 },
-				});
+                { "dont_support_bridges", false },
+			});
 			bool a, b, c, d;
             check(print, a, b, c, d);
             THEN("First layer height is honored")					{ REQUIRE(a == true); }
@@ -90,7 +92,8 @@ SCENARIO("SupportMaterial: support_layers_z and contact_distance", "[SupportMate
 				{ "support_material",	1 },
 				{ "layer_height",		0.2 },
 				{ "first_layer_height", 0.3 },
-				});
+                { "dont_support_bridges", false },
+            });
             bool a, b, c, d;
             check(print, a, b, c, d);
             THEN("First layer height is honored")					{ REQUIRE(a == true); }
@@ -104,7 +107,8 @@ SCENARIO("SupportMaterial: support_layers_z and contact_distance", "[SupportMate
 				{ "support_material",	1 },
 				{ "layer_height",		0.2 },
 				{ "first_layer_height", 0.3 },
-				});
+                { "dont_support_bridges", false },
+            });
             bool a, b, c, d;
             check(print, a, b, c, d);
             THEN("First layer height is honored")					{ REQUIRE(a == true); }

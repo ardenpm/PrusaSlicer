@@ -39,9 +39,9 @@
 
 #include <tbb/task_scheduler_init.h>
 
-#if defined(__linux) || defined(__GNUC__ )
+#if defined(__linux__) || defined(__GNUC__ )
 #include <strings.h>
-#endif /* __linux */
+#endif /* __linux__ */
 
 #ifdef _MSC_VER 
     #define strcasecmp _stricmp
@@ -432,7 +432,7 @@ CopyFileResult copy_file_inner(const std::string& from, const std::string& to, s
 	boost::system::error_code ec;
 	boost::filesystem::permissions(target, perms, ec);
 	if (ec)
-		BOOST_LOG_TRIVIAL(error) << "boost::filesystem::permisions before copy error message (this could be irrelevant message based on file system): " << ec.message();
+		BOOST_LOG_TRIVIAL(debug) << "boost::filesystem::permisions before copy error message (this could be irrelevant message based on file system): " << ec.message();
 	ec.clear();
 	boost::filesystem::copy_file(source, target, boost::filesystem::copy_option::overwrite_if_exists, ec);
 	if (ec) {
@@ -442,7 +442,7 @@ CopyFileResult copy_file_inner(const std::string& from, const std::string& to, s
 	ec.clear();
 	boost::filesystem::permissions(target, perms, ec);
 	if (ec)
-		BOOST_LOG_TRIVIAL(error) << "boost::filesystem::permisions after copy error message (this could be irrelevant message based on file system): " << ec.message();
+		BOOST_LOG_TRIVIAL(debug) << "boost::filesystem::permisions after copy error message (this could be irrelevant message based on file system): " << ec.message();
 	return SUCCESS;
 }
 
@@ -522,6 +522,12 @@ bool is_idx_file(const boost::filesystem::directory_entry &dir_entry)
 	return is_plain_file(dir_entry) && strcasecmp(dir_entry.path().extension().string().c_str(), ".idx") == 0;
 }
 
+bool is_gcode_file(const std::string &path)
+{
+	return boost::iends_with(path, ".gcode") || boost::iends_with(path, ".gco") ||
+		   boost::iends_with(path, ".g")     || boost::iends_with(path, ".ngc");
+}
+
 } // namespace Slic3r
 
 #ifdef WIN32
@@ -552,6 +558,7 @@ std::string encode_path(const char *src)
 }
 
 // Encode an 8-bit string from a local code page to UTF-8.
+// Multibyte to utf8
 std::string decode_path(const char *src)
 {  
 #ifdef WIN32

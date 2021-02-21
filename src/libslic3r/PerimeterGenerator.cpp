@@ -112,30 +112,69 @@ static void variable_width(const ThickPolylines& polylines, ExtrusionRole role, 
 class PerimeterGeneratorLoop {
 public:
     // Polygon of this contour.
-    Polygon polygon;
+    Polygon                             polygon;
     // Is it a contour or a hole?
     // Contours are CCW oriented, holes are CW oriented.
-    bool is_contour;
+    bool                                is_contour;
     // Depth in the hierarchy. External perimeter has depth = 0. An external perimeter could be both a contour and a hole.
-    unsigned short depth;
+    unsigned short                      depth;
+    // Should this contur be fuzzyfied on path generation?
+    bool                                fuzzify;
     // Children contour, may be both CCW and CW oriented (outer contours or holes).
     std::vector<PerimeterGeneratorLoop> children;
     
-    PerimeterGeneratorLoop(Polygon polygon, unsigned short depth, bool is_contour) : 
-        polygon(polygon), is_contour(is_contour), depth(depth) {}
+    PerimeterGeneratorLoop(const Polygon &polygon, unsigned short depth, bool is_contour, bool fuzzify) : 
+        polygon(polygon), is_contour(is_contour), depth(depth), fuzzify(fuzzify) {}
     // External perimeter. It may be CCW or CW oriented (outer contour or hole contour).
     bool is_external() const { return this->depth == 0; }
     // An island, which may have holes, but it does not have another internal island.
     bool is_internal_contour() const;
 };
 
-typedef std::vector<PerimeterGeneratorLoop> PerimeterGeneratorLoops;
+// Thanks Cura developers for this function.
+static void fuzzy_polygon(Polygon &poly, double fuzzy_skin_thickness, double fuzzy_skin_point_dist)
+{
+    const double min_dist_between_points = fuzzy_skin_point_dist * 3. / 4.; // hardcoded: the point distance may vary between 3/4 and 5/4 the supplied value
+    const double range_random_point_dist = fuzzy_skin_point_dist / 2.;
+    double dist_left_over = double(rand()) * (min_dist_between_points / 2) / double(RAND_MAX); // the distance to be traversed on the line before making the first new point
+    Point* p0 = &poly.points.back();
+    Points out;
+    out.reserve(poly.points.size());
+    for (Point &p1 : poly.points)
+    { // 'a' is the (next) new point between p0 and p1
+        Vec2d  p0p1      = (p1 - *p0).cast<double>();
+        double p0p1_size = p0p1.norm();
+        // so that p0p1_size - dist_last_point evaulates to dist_left_over - p0p1_size
+        double dist_last_point = dist_left_over + p0p1_size * 2.;
+        for (double p0pa_dist = dist_left_over; p0pa_dist < p0p1_size;
+            p0pa_dist += min_dist_between_points + double(rand()) * range_random_point_dist / double(RAND_MAX))
+        {
+            double r = double(rand()) * (fuzzy_skin_thickness * 2.) / double(RAND_MAX) - fuzzy_skin_thickness;
+            out.emplace_back(*p0 + (p0p1 * (p0pa_dist / p0p1_size) + perp(p0p1).cast<double>().normalized() * r).cast<coord_t>());
+            dist_last_point = p0pa_dist;
+        }
+        dist_left_over = p0p1_size - dist_last_point;
+        p0 = &p1;
+    }
+    while (out.size() < 3) {
+        size_t point_idx = poly.size() - 2;
+        out.emplace_back(poly[point_idx]);
+        if (point_idx == 0)
+            break;
+        -- point_idx;
+    }
+    if (out.size() >= 3)
+        poly.points = std::move(out);
+}
+
+using PerimeterGeneratorLoops = std::vector<PerimeterGeneratorLoop>;
 
 static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perimeter_generator, const PerimeterGeneratorLoops &loops, ThickPolylines &thin_walls)
 {
     // loops is an arrayref of ::Loop objects
     // turn each one into an ExtrusionLoop object
-    ExtrusionEntityCollection coll;
+    ExtrusionEntityCollection   coll;
+    Polygon                     fuzzified;
     for (const PerimeterGeneratorLoop &loop : loops) {
         bool is_external = loop.is_external();
         
@@ -153,23 +192,28 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
         
         // detect overhanging/bridging perimeters
         ExtrusionPaths paths;
+        const Polygon &polygon = loop.fuzzify ? fuzzified : loop.polygon;
+        if (loop.fuzzify) {
+            fuzzified = loop.polygon;
+            fuzzy_polygon(fuzzified, scaled<float>(perimeter_generator.config->fuzzy_skin_thickness.value), scaled<float>(perimeter_generator.config->fuzzy_skin_point_dist.value));
+        }
         if (perimeter_generator.config->overhangs && perimeter_generator.layer_id > 0
             && !(perimeter_generator.object_config->support_material && perimeter_generator.object_config->support_material_contact_distance.value == 0)) {
             // get non-overhang paths by intersecting this loop with the grown lower slices
             extrusion_paths_append(
                 paths,
-                intersection_pl(loop.polygon, perimeter_generator.lower_slices_polygons()),
+                intersection_pl({ polygon }, perimeter_generator.lower_slices_polygons()),
                 role,
                 is_external ? perimeter_generator.ext_mm3_per_mm()          : perimeter_generator.mm3_per_mm(),
                 is_external ? perimeter_generator.ext_perimeter_flow.width  : perimeter_generator.perimeter_flow.width,
                 (float)perimeter_generator.layer_height);
             
             // get overhang paths by checking what parts of this loop fall 
-            // outside the grown lower slices (thus where the distance between
+            // outside the grown lower slices (thus where the distance between
             // the loop centerline and original lower slices is >= half nozzle diameter
             extrusion_paths_append(
                 paths,
-                diff_pl(loop.polygon, perimeter_generator.lower_slices_polygons()),
+                diff_pl({ polygon }, perimeter_generator.lower_slices_polygons()),
                 erOverhangPerimeter,
                 perimeter_generator.mm3_per_mm_overhang(),
                 perimeter_generator.overhang_flow.width,
@@ -180,7 +224,7 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
             chain_and_reorder_extrusion_paths(paths, &paths.front().first_point());
         } else {
             ExtrusionPath path(role);
-            path.polyline   = loop.polygon.split_at_first_point();
+            path.polyline   = polygon.split_at_first_point();
             path.mm3_per_mm = is_external ? perimeter_generator.ext_mm3_per_mm()          : perimeter_generator.mm3_per_mm();
             path.width      = is_external ? perimeter_generator.ext_perimeter_flow.width  : perimeter_generator.perimeter_flow.width;
             path.height     = (float)perimeter_generator.layer_height;
@@ -261,7 +305,7 @@ void PerimeterGenerator::process()
     // internal flow which is unrelated.
     coord_t min_spacing         = coord_t(perimeter_spacing      * (1 - INSET_OVERLAP_TOLERANCE));
     coord_t ext_min_spacing     = coord_t(ext_perimeter_spacing  * (1 - INSET_OVERLAP_TOLERANCE));
-    bool    has_gap_fill 		= this->config->gap_fill_speed.value > 0;
+    bool    has_gap_fill 		= this->config->gap_fill_enabled.value && this->config->gap_fill_speed.value > 0;
 
     // prepare grown lower layer slices for overhang detection
     if (this->lower_slices != NULL && this->config->overhangs) {
@@ -271,7 +315,7 @@ void PerimeterGenerator::process()
         double nozzle_diameter = this->print_config->nozzle_diameter.get_at(this->config->perimeter_extruder-1);
         m_lower_slices_polygons = offset(*this->lower_slices, float(scale_(+nozzle_diameter/2)));
     }
-    
+
     // we need to process each island separately because we might have different
     // extra perimeters for each one
     for (const Surface &surface : this->slices->surfaces) {
@@ -312,7 +356,7 @@ void PerimeterGenerator::process()
                         for (ExPolygon &ex : expp)
                             ex.medial_axis(ext_perimeter_width + ext_perimeter_spacing2, min_width, &thin_walls);
                     }
-                    if (print_config->spiral_vase && offsets.size() > 1) {
+                    if (m_spiral_vase && offsets.size() > 1) {
                     	// Remove all but the largest area polygon.
                     	keep_largest_contour_only(offsets);
                     }
@@ -352,17 +396,22 @@ void PerimeterGenerator::process()
                     // If i > loop_number, we were looking just for gaps.
                     break;
                 }
-                for (const ExPolygon &expolygon : offsets) {
-	                // Outer contour may overlap with an inner contour,
-	                // inner contour may overlap with another inner contour,
-	                // outer contour may overlap with itself.
-	                //FIXME evaluate the overlaps, annotate each point with an overlap depth,
-	                // compensate for the depth of intersection.
-                    contours[i].emplace_back(PerimeterGeneratorLoop(expolygon.contour, i, true));
-                    if (! expolygon.holes.empty()) {
-                        holes[i].reserve(holes[i].size() + expolygon.holes.size());
-                        for (const Polygon &hole : expolygon.holes)
-                            holes[i].emplace_back(PerimeterGeneratorLoop(hole, i, false));
+                {
+                    const bool fuzzify_contours = this->config->fuzzy_skin != FuzzySkinType::None && i == 0 && this->layer_id > 0;
+                    const bool fuzzify_holes    = fuzzify_contours && this->config->fuzzy_skin == FuzzySkinType::All;
+                    for (const ExPolygon &expolygon : offsets) {
+    	                // Outer contour may overlap with an inner contour,
+    	                // inner contour may overlap with another inner contour,
+    	                // outer contour may overlap with itself.
+    	                //FIXME evaluate the overlaps, annotate each point with an overlap depth,
+                        // compensate for the depth of intersection.
+                        contours[i].emplace_back(expolygon.contour, i, true, fuzzify_contours);
+
+                        if (! expolygon.holes.empty()) {
+                            holes[i].reserve(holes[i].size() + expolygon.holes.size());
+                            for (const Polygon &hole : expolygon.holes)
+                                holes[i].emplace_back(hole, i, false, fuzzify_holes);
+                        }
                     }
                 }
                 last = std::move(offsets);
@@ -433,7 +482,7 @@ void PerimeterGenerator::process()
             // we continue inwards after having finished the brim
             // TODO: add test for perimeter order
             if (this->config->external_perimeters_first || 
-                (this->layer_id == 0 && this->print_config->brim_width.value > 0))
+                (this->layer_id == 0 && this->object_config->brim_width.value > 0))
                 entities.reverse();
             // append perimeters for this slice as a collection
             if (! entities.empty())

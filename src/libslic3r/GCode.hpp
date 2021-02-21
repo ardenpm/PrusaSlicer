@@ -5,10 +5,10 @@
 #include "ExPolygon.hpp"
 #include "GCodeWriter.hpp"
 #include "Layer.hpp"
-#include "MotionPlanner.hpp"
 #include "Point.hpp"
 #include "PlaceholderParser.hpp"
 #include "PrintConfig.hpp"
+#include "GCode/AvoidCrossingPerimeters.hpp"
 #include "GCode/CoolingBuffer.hpp"
 #include "GCode/SpiralVase.hpp"
 #include "GCode/ToolOrdering.hpp"
@@ -19,6 +19,7 @@
 #include "GCode/ThumbnailData.hpp"
 
 #include <memory>
+#include <map>
 #include <string>
 
 #ifdef HAS_PRESSURE_EQUALIZER
@@ -32,36 +33,7 @@ class GCode;
 
 namespace { struct Item; }
 struct PrintInstance;
-using PrintObjectPtrs = std::vector<PrintObject*>;
-
-class AvoidCrossingPerimeters {
-public:
-    
-    // this flag triggers the use of the external configuration space
-    bool use_external_mp;
-    bool use_external_mp_once;  // just for the next travel move
-    
-    // this flag disables avoid_crossing_perimeters just for the next travel move
-    // we enable it by default for the first travel move in print
-    bool disable_once;
-    
-    AvoidCrossingPerimeters() : use_external_mp(false), use_external_mp_once(false), disable_once(true) {}
-    ~AvoidCrossingPerimeters() {}
-
-    void reset() { m_external_mp.reset(); m_layer_mp.reset(); }
-	void init_external_mp(const Print &print);
-    void init_layer_mp(const ExPolygons &islands) { m_layer_mp = Slic3r::make_unique<MotionPlanner>(islands); }
-
-    Polyline travel_to(const GCode &gcodegen, const Point &point);
-
-private:
-    // For initializing the regions to avoid.
-	static Polygons collect_contours_all_layers(const PrintObjectPtrs& objects);
-
-    std::unique_ptr<MotionPlanner> m_external_mp;
-    std::unique_ptr<MotionPlanner> m_layer_mp;
-};
-
+class ConstPrintObjectPtrsAdaptor;
 
 class OozePrevention {
 public:
@@ -159,9 +131,9 @@ public:
         m_volumetric_speed(0),
         m_last_pos_defined(false),
         m_last_extrusion_role(erNone),
+        m_last_width(0.0f),
 #if ENABLE_GCODE_VIEWER_DATA_CHECKING
         m_last_mm3_per_mm(0.0),
-        m_last_width(0.0f),
 #endif // ENABLE_GCODE_VIEWER_DATA_CHECKING
         m_brim_done(false),
         m_second_layer_things_done(false),
@@ -184,6 +156,7 @@ public:
     const FullPrintConfig &config() const { return m_config; }
     const Layer*    layer() const { return m_layer; }
     GCodeWriter&    writer() { return m_writer; }
+    const GCodeWriter& writer() const { return m_writer; }
     PlaceholderParser& placeholder_parser() { return m_placeholder_parser; }
     const PlaceholderParser& placeholder_parser() const { return m_placeholder_parser; }
     // Process a template through the placeholder parser, collect error messages to be reported
@@ -223,6 +196,7 @@ private:
         // Set of object & print layers of the same PrintObject and with the same print_z.
         const std::vector<LayerToPrint> &layers,
         const LayerTools  				&layer_tools,
+        const bool                       last_layer,
 		// Pairs of PrintObject index and its instance index.
 		const std::vector<const PrintInstance*> *ordering,
         // If set to size_t(-1), then print all copies of all objects.
@@ -322,8 +296,10 @@ private:
     FullPrintConfig                     m_config;
     GCodeWriter                         m_writer;
     PlaceholderParser                   m_placeholder_parser;
+    // For random number generator etc.
+    PlaceholderParser::ContextData      m_placeholder_parser_context;
     // Collection of templates, on which the placeholder substitution failed.
-    std::set<std::string>               m_placeholder_parser_failed_templates;
+    std::map<std::string, std::string>  m_placeholder_parser_failed_templates;
     OozePrevention                      m_ooze_prevention;
     Wipe                                m_wipe;
     AvoidCrossingPerimeters             m_avoid_crossing_perimeters;
@@ -351,9 +327,10 @@ private:
     // Support for G-Code Processor
     float                               m_last_height{ 0.0f };
     float                               m_last_layer_z{ 0.0f };
+    float                               m_max_layer_z{ 0.0f };
+    float                               m_last_width{ 0.0f };
 #if ENABLE_GCODE_VIEWER_DATA_CHECKING
     double                              m_last_mm3_per_mm;
-    float                               m_last_width{ 0.0f };
 #endif // ENABLE_GCODE_VIEWER_DATA_CHECKING
 
     Point                               m_last_pos;

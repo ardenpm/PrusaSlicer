@@ -15,7 +15,8 @@ class PresetBundle
 {
 public:
     PresetBundle();
-    ~PresetBundle();
+    PresetBundle(const PresetBundle &rhs);
+    PresetBundle& operator=(const PresetBundle &rhs);
 
     // Remove all the presets but the "-- default --".
     // Optionally remove all the files referenced by the presets from the user profile directory.
@@ -25,8 +26,7 @@ public:
 
     // Load ini files of all types (print, filament, printer) from Slic3r::data_dir() / presets.
     // Load selections (current print, current filaments, current printer) from config.ini
-    // This is done just once on application start up.
-    void            load_presets(AppConfig &config, const std::string &preferred_model_id = "");
+    void            load_presets(AppConfig &config, const std::string &preferred_model_id = std::string());
 
     // Export selections (current print, current filaments, current printer) into config.ini
     void            export_selections(AppConfig &config);
@@ -70,7 +70,7 @@ public:
 
     // Load user configuration and store it into the user profiles.
     // This method is called by the configuration wizard.
-    void                        load_config(const std::string &name, DynamicPrintConfig config)
+    void                        load_config_from_wizard(const std::string &name, DynamicPrintConfig config)
         { this->load_config_file_config(name, false, std::move(config)); }
 
     // Load configuration that comes from a model file containing configuration, such as 3MF et al.

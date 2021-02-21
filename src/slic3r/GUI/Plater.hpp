@@ -28,6 +28,7 @@ class ModelInstance;
 class Print;
 class SLAPrint;
 enum SLAPrintObjectStep : unsigned int;
+enum class ConversionType : int;
 
 using ModelInstancePtrs = std::vector<ModelInstance*>;
 
@@ -144,11 +145,16 @@ public:
     void extract_config_from_project();
     void load_gcode();
     void load_gcode(const wxString& filename);
+    void reload_gcode_from_disk();
     void refresh_print();
 
     std::vector<size_t> load_files(const std::vector<boost::filesystem::path>& input_files, bool load_model = true, bool load_config = true, bool imperial_units = false);
     // To be called when providing a list of files to the GUI slic3r on command line.
     std::vector<size_t> load_files(const std::vector<std::string>& input_files, bool load_model = true, bool load_config = true, bool imperial_units = false);
+    // to be called on drag and drop
+    bool load_files(const wxArrayString& filenames);
+
+    const wxString& get_last_loaded_gcode() const { return m_last_loaded_gcode; }
 
     void update();
     void stop_jobs();
@@ -184,7 +190,7 @@ public:
     void fill_bed_with_instances();
     bool is_selection_empty() const;
     void scale_selection_to_fit_print_volume();
-    void convert_unit(bool from_imperial_unit);
+    void convert_unit(ConversionType conv_type);
 
     void cut(size_t obj_idx, size_t instance_idx, coordf_t z, bool keep_upper = true, bool keep_lower = true, bool rotate_lower = false);
 
@@ -226,6 +232,7 @@ public:
     void leave_gizmos_stack();
 
     void on_extruders_change(size_t extruders_count);
+    bool update_filament_colors_in_full_config();
     void on_config_change(const DynamicPrintConfig &config);
     void force_filament_colors_update();
     void force_print_bed_update();
@@ -358,6 +365,11 @@ public:
 	};
 
     bool inside_snapshot_capture();
+
+#if ENABLE_RENDER_STATISTICS
+    void toggle_render_statistic_dialog();
+    bool is_render_statistic_dialog_visible() const;
+#endif // ENABLE_RENDER_STATISTICS
 
 	// Wrapper around wxWindow::PopupMenu to suppress error messages popping out while tracking the popup menu.
 	bool PopupMenu(wxMenu *menu, const wxPoint& pos = wxDefaultPosition);

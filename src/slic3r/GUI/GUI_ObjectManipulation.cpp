@@ -45,11 +45,11 @@ static double get_volume_min_z(const GLVolume* volume)
 
 
 
-static wxBitmapComboBox* create_word_local_combo(wxWindow *parent)
+static choice_ctrl* create_word_local_combo(wxWindow *parent)
 {
     wxSize size(15 * wxGetApp().em_unit(), -1);
 
-    wxBitmapComboBox *temp = nullptr;
+    choice_ctrl* temp = nullptr;
 #ifdef __WXOSX__
     /* wxBitmapComboBox with wxCB_READONLY style return NULL for GetTextCtrl(),
      * so ToolTip doesn't shown.
@@ -59,7 +59,7 @@ static wxBitmapComboBox* create_word_local_combo(wxWindow *parent)
     temp->SetTextCtrlStyle(wxTE_READONLY);
 	temp->Create(parent, wxID_ANY, wxString(""), wxDefaultPosition, size, 0, nullptr);
 #else
-	temp = new wxBitmapComboBox(parent, wxID_ANY, wxString(""), wxDefaultPosition, size, 0, nullptr, wxCB_READONLY);
+	temp = new choice_ctrl(parent, wxID_ANY, wxString(""), wxDefaultPosition, size, 0, nullptr, wxCB_READONLY);
 #endif //__WXOSX__
 
     temp->SetFont(Slic3r::GUI::wxGetApp().normal_font());
@@ -70,27 +70,13 @@ static wxBitmapComboBox* create_word_local_combo(wxWindow *parent)
     temp->SetSelection(0);
     temp->SetValue(temp->GetString(0));
 
-#ifndef __WXGTK__
-    /* Workaround for a correct rendering of the control without Bitmap (under MSW and OSX):
-     * 
-     * 1. We should create small Bitmap to fill Bitmaps RefData,
-     *    ! in this case wxBitmap.IsOK() return true.
-     * 2. But then set width to 0 value for no using of bitmap left and right spacing 
-     * 3. Set this empty bitmap to the at list one item and BitmapCombobox will be recreated correct
-     * 
-     * Note: Set bitmap height to the Font size because of OSX rendering.
-     */
-    wxBitmap empty_bmp(1, temp->GetFont().GetPixelSize().y + 2);
-    empty_bmp.SetWidth(0);
-    temp->SetItemBitmap(0, empty_bmp);
-#endif
-
     temp->SetToolTip(_L("Select coordinate space, in which the transformation will be performed."));
 	return temp;
 }
 
-void msw_rescale_word_local_combo(wxBitmapComboBox* combo)
+void msw_rescale_word_local_combo(choice_ctrl* combo)
 {
+#ifdef __WXOSX__
     const wxString selection = combo->GetString(combo->GetSelection());
 
     /* To correct scaling (set new controll size) of a wxBitmapCombobox
@@ -111,11 +97,10 @@ void msw_rescale_word_local_combo(wxBitmapComboBox* combo)
     combo->Append(_L("World coordinates"));
     combo->Append(_L("Local coordinates"));
 
-    wxBitmap empty_bmp(1, combo->GetFont().GetPixelSize().y + 2);
-    empty_bmp.SetWidth(0);
-    combo->SetItemBitmap(0, empty_bmp);
-
     combo->SetValue(selection);
+#else
+    combo->SetMinSize(wxSize(15 * wxGetApp().em_unit(), -1));
+#endif
 }
 
 static void set_font_and_background_style(wxWindow* win, const wxFont& font)
@@ -124,10 +109,13 @@ static void set_font_and_background_style(wxWindow* win, const wxFont& font)
     win->SetBackgroundStyle(wxBG_STYLE_PAINT);
 }
 
+static const wxString axes_color_text[] = { "#990000", "#009900", "#000099" };
+static const wxString axes_color_back[] = { "#f5dcdc", "#dcf5dc", "#dcdcf5" };
 ObjectManipulation::ObjectManipulation(wxWindow* parent) :
     OG_Settings(parent, true)
 {
     m_imperial_units = wxGetApp().app_config->get("use_inches") == "1";
+    m_use_colors     = wxGetApp().app_config->get("color_mapinulation_panel") == "1";
 
     m_manifold_warning_bmp = ScalableBitmap(parent, "exclamation");
 
@@ -251,13 +239,14 @@ ObjectManipulation::ObjectManipulation(wxWindow* parent) :
 
     // Add Axes labels with icons
     static const char axes[] = { 'X', 'Y', 'Z' };
-//    std::vector<wxString> axes_color = {"#990000", "#009900","#000099"};
+//    std::vector<wxString> axes_color = {"#EE0000", "#00EE00", "#0000EE"};
     for (size_t axis_idx = 0; axis_idx < sizeof(axes); axis_idx++) {
         const char label = axes[axis_idx];
 
         wxStaticText* axis_name = new wxStaticText(m_parent, wxID_ANY, wxString(label));
         set_font_and_background_style(axis_name, wxGetApp().bold_font());
-//        axis_name->SetForegroundColour(wxColour(axes_color[axis_idx]));
+        //if (m_use_colors)
+        //    axis_name->SetForegroundColour(wxColour(axes_color_text[axis_idx]));
 
         sizer = new wxBoxSizer(wxHORIZONTAL);
         // Under OSX we use font, smaller than default font, so
@@ -420,7 +409,7 @@ ObjectManipulation::ObjectManipulation(wxWindow* parent) :
 
     m_main_grid_sizer->Add(editors_grid_sizer, 1, wxEXPAND);
 
-    m_check_inch = new wxCheckBox(parent, wxID_ANY, "Inches");
+    m_check_inch = new wxCheckBox(parent, wxID_ANY, _L("Inches"));
     m_check_inch->SetFont(wxGetApp().normal_font());
 
     m_check_inch->SetValue(m_imperial_units);
@@ -496,8 +485,20 @@ void ObjectManipulation::update_ui_from_settings()
             update(3/*meSize*/,     m_new_size);
         }
     }
-
     m_check_inch->SetValue(m_imperial_units);
+
+    if (m_use_colors != (wxGetApp().app_config->get("color_mapinulation_panel") == "1"))
+    {
+        m_use_colors = wxGetApp().app_config->get("color_mapinulation_panel") == "1";
+        // update colors for edit-boxes
+        int axis_id = 0;
+        for (ManipulationEditor* editor : m_editors) {
+//            editor->SetForegroundColour(m_use_colors ? wxColour(axes_color_text[axis_id]) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+            editor->SetBackgroundColour(m_use_colors ? wxColour(axes_color_back[axis_id]) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+            if (++axis_id == 3)
+                axis_id = 0;
+        }
+    }
 }
 
 void ObjectManipulation::update_settings_value(const Selection& selection)
@@ -1007,7 +1008,7 @@ ManipulationEditor::ManipulationEditor(ObjectManipulation* parent,
                                        const std::string& opt_key,
                                        int axis) :
     wxTextCtrl(parent->parent(), wxID_ANY, wxEmptyString, wxDefaultPosition,
-        wxSize(5*int(wxGetApp().em_unit()), wxDefaultCoord), wxTE_PROCESS_ENTER),
+        wxSize((wxOSX ? 5 : 6)*int(wxGetApp().em_unit()), wxDefaultCoord), wxTE_PROCESS_ENTER),
     m_opt_key(opt_key),
     m_axis(axis)
 {
@@ -1015,6 +1016,10 @@ ManipulationEditor::ManipulationEditor(ObjectManipulation* parent,
 #ifdef __WXOSX__
     this->OSXDisableAllSmartSubstitutions();
 #endif // __WXOSX__
+    if (parent->use_colors()) {
+//        this->SetForegroundColour(wxColour(axes_color_text[axis]));
+        this->SetBackgroundColour(wxColour(axes_color_back[axis]));
+    }
 
     // A name used to call handle_sidebar_focus_event()
     m_full_opt_name = m_opt_key+"_"+axes[axis];

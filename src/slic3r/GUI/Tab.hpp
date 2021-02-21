@@ -98,10 +98,6 @@ protected:
 };
 
 
-wxDECLARE_EVENT(EVT_TAB_VALUE_CHANGED, wxCommandEvent);
-wxDECLARE_EVENT(EVT_TAB_PRESETS_CHANGED, SimpleEvent);
-
-
 using PageShp = std::shared_ptr<Page>;
 class Tab: public wxPanel
 {
@@ -116,6 +112,7 @@ protected:
 	const wxString		m_title;
 	TabPresetComboBox*	m_presets_choice;
 	ScalableButton*		m_search_btn;
+	ScalableButton*		m_btn_compare_preset;
 	ScalableButton*		m_btn_save_preset;
 	ScalableButton*		m_btn_delete_preset;
 	ScalableButton*		m_btn_edit_ph_printer {nullptr};
@@ -136,8 +133,8 @@ protected:
 		ScalableButton 	*btn  = nullptr;
 		std::string  key_list; // "compatible_printers"
 		std::string  key_condition;
-		std::string  dialog_title;
-		std::string  dialog_label;
+		wxString     dialog_title;
+		wxString     dialog_label;
 	};
 	PresetDependencies 	m_compatible_printers;
 	PresetDependencies 	m_compatible_prints;
@@ -250,7 +247,7 @@ public:
 
 	// map of option name -> wxColour (color of the colored label, associated with option) 
     // Used for options which don't have corresponded field
-	std::map<std::string, wxColour*>	m_colored_Label_colors;
+	std::map<std::string, wxColour>	m_colored_Label_colors;
 
     // Counter for the updating (because of an update() function can have a recursive behavior):
     // 1. increase value from the very beginning of an update() function
@@ -294,12 +291,13 @@ public:
 	void		OnTreeSelChange(wxTreeEvent& event);
 	void		OnKeyDown(wxKeyEvent& event);
 
+	void		compare_preset();
 	void		save_preset(std::string name = std::string(), bool detach = false);
 	void		delete_preset();
 	void		toggle_show_hide_incompatible();
 	void		update_show_hide_incompatible_button();
 	void		update_ui_from_settings();
-	void		update_labels_colour();
+	void		update_label_colours();
 	void		decorate();
 	void		update_changed_ui();
 	void		get_sys_and_mod_flags(const std::string& opt_key, bool& sys_page, bool& modified_page);
@@ -309,6 +307,7 @@ public:
 	void		on_roll_back_value(const bool to_sys = false);
 
 	PageShp		add_options_page(const wxString& title, const std::string& icon, bool is_extruder_pages = false);
+	static wxString translate_category(const wxString& title, Preset::Type preset_type);
 
 	virtual void	OnActivate();
 	virtual void	on_preset_loaded() {}
@@ -384,7 +383,6 @@ public:
 private:
 	ogStaticText*	m_recommended_thin_wall_thickness_description_line = nullptr;
 	ogStaticText*	m_top_bottom_shell_thickness_explanation = nullptr;
-	bool			m_support_material_overhangs_queried = false;
 };
 
 class TabFilament : public Tab
@@ -459,7 +457,7 @@ public:
     void        update_pages(); // update m_pages according to printer technology
 	void		extruders_count_changed(size_t extruders_count);
 	PageShp		build_kinematics_page();
-	void		build_unregular_pages();
+	void		build_unregular_pages(bool from_initial_build = false);
 	void		on_preset_loaded() override;
 	void		init_options_list() override;
 	void		msw_rescale() override;

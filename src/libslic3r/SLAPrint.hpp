@@ -1,6 +1,7 @@
 #ifndef slic3r_SLAPrint_hpp_
 #define slic3r_SLAPrint_hpp_
 
+#include <cstdint>
 #include <mutex>
 #include "PrintBase.hpp"
 #include "SLA/RasterBase.hpp"
@@ -37,7 +38,7 @@ using _SLAPrintObjectBase =
 
 // Layers according to quantized height levels. This will be consumed by
 // the printer (rasterizer) in the SLAPrint class.
-// using coord_t = long long;
+// using coord_t = int64_t;
 
 enum SliceOrigin { soSupport, soModel };
 
@@ -423,7 +424,7 @@ public:
     void                clear() override;
     bool                empty() const override { return m_objects.empty(); }
     // List of existing PrintObject IDs, to remove notifications for non-existent IDs.
-    std::vector<ObjectID> print_object_ids() const;
+    std::vector<ObjectID> print_object_ids() const override;
     ApplyStatus         apply(const Model &model, DynamicPrintConfig config) override;
     void                set_task(const TaskParams &params) override;
     void                process() override;

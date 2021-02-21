@@ -4,9 +4,6 @@
 #include "libslic3r/CustomGCode.hpp"
 #include "wxExtensions.hpp"
 
-#if !ENABLE_GCODE_VIEWER
-#include <wx/wx.h>
-#endif // !ENABLE_GCODE_VIEWER
 #include <wx/window.h>
 #include <wx/control.h>
 #include <wx/dc.h>
@@ -46,8 +43,6 @@ enum FocusedItem {
     fiActionIcon,
     fiLowerThumb,
     fiHigherThumb,
-    fiLowerThumbText,
-    fiHigherThumbText,
     fiTick
 };
 
@@ -79,9 +74,7 @@ enum DrawMode
     dmRegular,
     dmSlaPrint,
     dmSequentialFffPrint,
-#if ENABLE_GCODE_VIEWER
     dmSequentialGCodeView,
-#endif // ENABLE_GCODE_VIEWER
 };
 
 enum LabelType
@@ -199,6 +192,7 @@ public:
     ~Control() {}
 
     void    msw_rescale();
+    void    sys_color_changed();
 
     int     GetMinValue() const { return m_min_value; }
     int     GetMaxValue() const { return m_max_value; }
@@ -221,6 +215,9 @@ public:
     void    SetKoefForLabels(const double koef)                { m_label_koef = koef; }
     void    SetSliderValues(const std::vector<double>& values);
     void    ChangeOneLayerLock();
+#if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
+    void    SetSliderAlternateValues(const std::vector<double>& values) { m_alternate_values = values; }
+#endif // ENABLE_GCODE_LINES_ID_IN_H_SLIDER
 
     Info    GetTicksValues() const;
     void    SetTicksValues(const Info &custom_gcode_per_print_z);
@@ -228,9 +225,7 @@ public:
     void    SetLayersTimes(const std::vector<double>& layers_times);
 
     void    SetDrawMode(bool is_sla_print, bool is_sequential_print);
-#if ENABLE_GCODE_VIEWER
     void    SetDrawMode(DrawMode mode) { m_draw_mode = mode; }
-#endif // ENABLE_GCODE_VIEWER
 
     void    SetManipulationMode(Mode mode)  { m_mode = mode; }
     Mode    GetManipulationMode() const     { return m_mode; }
@@ -270,12 +265,8 @@ public:
     void discard_all_thicks();
     void move_current_thumb_to_pos(wxPoint pos);
     void edit_extruder_sequence();
-#if ENABLE_GCODE_VIEWER
     void jump_to_value();
     void enable_action_icon(bool enable) { m_enable_action_icon = enable; }
-#else
-    void jump_to_print_z();
-#endif // ENABLE_GCODE_VIEWER
     void show_add_context_menu();
     void show_edit_context_menu();
     void show_cog_icon_context_menu();
@@ -371,9 +362,7 @@ private:
     bool        m_is_one_layer = false;
     bool        m_is_focused = false;
     bool        m_force_mode_apply = true;
-#if ENABLE_GCODE_VIEWER
     bool        m_enable_action_icon = true;
-#endif // ENABLE_GCODE_VIEWER
 
     DrawMode    m_draw_mode = dmRegular;
 
@@ -386,8 +375,6 @@ private:
 
     wxRect      m_rect_lower_thumb;
     wxRect      m_rect_higher_thumb;
-    mutable wxRect m_rect_lower_thumb_text;
-    mutable wxRect m_rect_higher_thumb_text;
     wxRect      m_rect_tick_action;
     wxRect      m_rect_one_layer_icon;
     wxRect      m_rect_revert_icon;
@@ -399,13 +386,16 @@ private:
     int         m_cog_icon_dim;
     long        m_style;
     long        m_extra_style;
-    float       m_label_koef = 1.0;
+    float       m_label_koef{ 1.0 };
 
     std::vector<double> m_values;
     TickCodeInfo        m_ticks;
     std::vector<double> m_layers_times;
-
     std::vector<std::string>    m_extruder_colors;
+
+#if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
+    std::vector<double> m_alternate_values;
+#endif // ENABLE_GCODE_LINES_ID_IN_H_SLIDER
 
 // control's view variables
     wxCoord SLIDER_MARGIN; // margin around slider

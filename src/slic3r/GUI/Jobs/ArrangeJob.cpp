@@ -6,6 +6,10 @@
 #include "slic3r/GUI/Plater.hpp"
 #include "slic3r/GUI/GLCanvas3D.hpp"
 #include "slic3r/GUI/GUI.hpp"
+#include "slic3r/GUI/GUI_App.hpp"
+#include "slic3r/GUI/GUI_ObjectManipulation.hpp"
+
+#include "libnest2d/common.hpp"
 
 namespace Slic3r { namespace GUI {
 
@@ -30,18 +34,18 @@ public:
     ArrangePolygon get_arrange_polygon() const
     {
         Polygon ap({
-            {coord_t(0), coord_t(0)},
-            {scaled(m_bb_size(X)), coord_t(0)},
-            {scaled(m_bb_size)},
-            {coord_t(0), scaled(m_bb_size(Y))},
-            {coord_t(0), coord_t(0)},
+            {scaled(m_bb.min)},
+            {scaled(m_bb.max.x()), scaled(m_bb.min.y())},
+            {scaled(m_bb.max)},
+            {scaled(m_bb.min.x()), scaled(m_bb.max.y())}
             });
         
         ArrangePolygon ret;
         ret.poly.contour = std::move(ap);
         ret.translation  = scaled(m_pos);
         ret.rotation     = m_rotation;
-        ret.priority++;
+        ++ret.priority;
+
         return ret;
     }
 };
@@ -74,11 +78,11 @@ void ArrangeJob::prepare_all() {
     for (ModelObject *obj: m_plater->model().objects)
         for (ModelInstance *mi : obj->instances) {
             ArrangePolygons & cont = mi->printable ? m_selected : m_unprintable;
-            cont.emplace_back(get_arrange_poly(mi, m_plater));
+            cont.emplace_back(get_arrange_poly(PtrWrapper{mi}, m_plater));
         }
 
-    if (auto wti = get_wipe_tower(*m_plater))
-        m_selected.emplace_back(wti.get_arrange_polygon());
+    if (auto wti = get_wipe_tower_arrangepoly(*m_plater))
+        m_selected.emplace_back(std::move(*wti));
 }
 
 void ArrangeJob::prepare_selected() {
@@ -106,8 +110,9 @@ void ArrangeJob::prepare_selected() {
                 inst_sel[size_t(inst_id)] = true;
         
         for (size_t i = 0; i < inst_sel.size(); ++i) {
-            ArrangePolygon &&ap = get_arrange_poly(mo->instances[i], m_plater);
-            
+            ArrangePolygon &&ap =
+                get_arrange_poly(PtrWrapper{mo->instances[i]}, m_plater);
+
             ArrangePolygons &cont = mo->instances[i]->printable ?
                         (inst_sel[i] ? m_selected :
                                        m_unselected) :
@@ -118,11 +123,11 @@ void ArrangeJob::prepare_selected() {
     }
     
     if (auto wti = get_wipe_tower(*m_plater)) {
-        ArrangePolygon &&ap = get_arrange_poly(&wti, m_plater);
-        
-        m_plater->get_selection().is_wipe_tower() ?
-                    m_selected.emplace_back(std::move(ap)) :
-                    m_unselected.emplace_back(std::move(ap));
+        ArrangePolygon &&ap = get_arrange_poly(wti, m_plater);
+
+        auto &cont = m_plater->get_selection().is_wipe_tower() ? m_selected :
+                                                                 m_unselected;
+        cont.emplace_back(std::move(ap));
     }
     
     // If the selection was empty arrange everything
@@ -139,40 +144,47 @@ void ArrangeJob::prepare()
     wxGetKeyState(WXK_SHIFT) ? prepare_selected() : prepare_all();
 }
 
+void ArrangeJob::on_exception(const std::exception_ptr &eptr)
+{
+    try {
+        if (eptr)
+            std::rethrow_exception(eptr);
+    } catch (libnest2d::GeometryException &) {
+        show_error(m_plater, _(L("Could not arrange model objects! "
+                                 "Some geometries may be invalid.")));
+    } catch (std::exception &) {
+        PlaterJob::on_exception(eptr);
+    }
+}
+
 void ArrangeJob::process()
 {
     static const auto arrangestr = _(L("Arranging"));
 
-    GLCanvas3D::ArrangeSettings settings =
-        m_plater->canvas3D()->get_arrange_settings();
-    
+    const GLCanvas3D::ArrangeSettings &settings =
+        static_cast<const GLCanvas3D*>(m_plater->canvas3D())->get_arrange_settings();
+
     arrangement::ArrangeParams params;
-    params.min_obj_distance = scaled(settings.distance);
     params.allow_rotations  = settings.enable_rotation;
-    
+    params.min_obj_distance = scaled(settings.distance);
+
     auto count = unsigned(m_selected.size() + m_unprintable.size());
     Points bedpts = get_bed_shape(*m_plater->config());
     
     params.stopcondition = [this]() { return was_canceled(); };
     
-    try {
-        params.progressind = [this, count](unsigned st) {
-            st += m_unprintable.size();
-            if (st > 0) update_status(int(count - st), arrangestr);
-        };
-        
-        arrangement::arrange(m_selected, m_unselected, bedpts, params);
-        
-        params.progressind = [this, count](unsigned st) {
-            if (st > 0) update_status(int(count - st), arrangestr);
-        };
-        
-        arrangement::arrange(m_unprintable, {}, bedpts, params);
-    } catch (std::exception & /*e*/) {
-        GUI::show_error(m_plater,
-                        _(L("Could not arrange model objects! "
-                            "Some geometries may be invalid.")));
-    }
+    params.progressind = [this, count](unsigned st) {
+        st += m_unprintable.size();
+        if (st > 0) update_status(int(count - st), arrangestr);
+    };
+
+    arrangement::arrange(m_selected, m_unselected, bedpts, params);
+
+    params.progressind = [this, count](unsigned st) {
+        if (st > 0) update_status(int(count - st), arrangestr);
+    };
+
+    arrangement::arrange(m_unprintable, {}, bedpts, params);
 
     // finalize just here.
     update_status(int(count),
@@ -204,7 +216,8 @@ void ArrangeJob::finalize() {
     }
     
     m_plater->update();
-    
+    wxGetApp().obj_manipul()->set_dirty();
+
     Job::finalize();
 }
 
@@ -212,16 +225,9 @@ std::optional<arrangement::ArrangePolygon>
 get_wipe_tower_arrangepoly(const Plater &plater)
 {
     if (auto wti = get_wipe_tower(plater))
-        return wti.get_arrange_polygon();
+        return get_arrange_poly(wti, &plater);
 
     return {};
-}
-
-void apply_wipe_tower_arrangepoly(Plater &                           plater,
-                                  const arrangement::ArrangePolygon &ap)
-{
-    WipeTower{plater.canvas3D()->get_wipe_tower_info()}
-        .apply_arrange_result(ap.translation.cast<double>(), ap.rotation);
 }
 
 double bed_stride(const Plater *plater) {

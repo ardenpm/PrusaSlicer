@@ -16,8 +16,8 @@ typedef std::vector<Polygon> Polygons;
 class Polygon : public MultiPoint
 {
 public:
-    operator Polygons() const { Polygons pp; pp.push_back(*this); return pp; }
-    operator Polyline() const { return this->split_at_first_point(); }
+    explicit operator Polygons() const { Polygons pp; pp.push_back(*this); return pp; }
+    explicit operator Polyline() const { return this->split_at_first_point(); }
     Point& operator[](Points::size_type idx) { return this->points[idx]; }
     const Point& operator[](Points::size_type idx) const { return this->points[idx]; }
 
@@ -55,6 +55,7 @@ public:
     bool make_counter_clockwise();
     bool make_clockwise();
     bool is_valid() const { return this->points.size() >= 3; }
+    void douglas_peucker(double tolerance);
 
     // Does an unoriented polygon contain a point?
     // Tested by counting intersections along a horizontal line.

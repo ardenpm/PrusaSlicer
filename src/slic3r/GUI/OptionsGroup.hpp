@@ -115,22 +115,9 @@ public:
     /// Returns a copy of the pointer of the parent wxWindow.
     /// Accessor function is because users are not allowed to change the parent
     /// but defining it as const means a lot of const_casts to deal with wx functions.
-    inline wxWindow* parent() const { 
-#if 0//#ifdef __WXGTK__
-		return m_panel;
-#else
-		return m_parent;
-#endif /* __WXGTK__ */
-    }
-#if 0//#ifdef __WXGTK__
-    wxWindow* get_parent() const {
-        return m_parent;
-    }
-#endif /* __WXGTK__ */
+    inline wxWindow* parent() const { return m_parent; }
 
-    wxWindow* ctrl_parent() const {
-    	return this->custom_ctrl && m_use_custom_ctrl_as_parent ? (wxWindow*)this->custom_ctrl : (this->stb ? (wxWindow*)this->stb : this->parent());
-    }
+    wxWindow*   ctrl_parent() const;
 
 	void		append_line(const Line& line);
 	// create controls for the option group
@@ -234,6 +221,8 @@ public:
 	ConfigOptionsGroup(	wxWindow* parent, const wxString& title, ModelConfig* config, 
 						bool is_tab_opt = false, column_t extra_clmn = nullptr) :
 		OptionsGroup(parent, title, is_tab_opt, extra_clmn), m_config(&config->get()), m_modelconfig(config) {}
+	ConfigOptionsGroup(	wxWindow* parent) :
+		OptionsGroup(parent, wxEmptyString, true, nullptr) {}
 
 	const std::string& config_category() const throw() { return m_config_category; }
 	const t_opt_map&   opt_map() const throw() { return m_opt_map; }
@@ -284,7 +273,6 @@ private:
     const DynamicPrintConfig*	m_config {nullptr};
     // If the config is modelconfig, then ModelConfig::touch() has to be called after value change.
     ModelConfig*				m_modelconfig { nullptr };
-	bool						m_full_labels{ 0 };
 	t_opt_map					m_opt_map;
     std::string             	m_config_category;
 

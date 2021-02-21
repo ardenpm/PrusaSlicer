@@ -64,19 +64,30 @@ void Layer::make_slices()
         this->lslices.emplace_back(std::move(slices[i]));
 }
 
-// Merge typed slices into untyped slices. This method is used to revert the effects of detect_surfaces_type() called for posPrepareInfill.
-void Layer::merge_slices()
+static inline bool layer_needs_raw_backup(const Layer *layer)
 {
-    if (m_regions.size() == 1 && (this->id() > 0 || this->object()->config().elefant_foot_compensation.value == 0)) {
-        // Optimization, also more robust. Don't merge classified pieces of layerm->slices,
-        // but use the non-split islands of a layer. For a single region print, these shall be equal.
-        // Don't use this optimization on 1st layer with Elephant foot compensation applied, as this->lslices are uncompensated,
-        // while regions are compensated.
-        m_regions.front()->slices.set(this->lslices, stInternal);
-    } else {
+    return ! (layer->regions().size() == 1 && (layer->id() > 0 || layer->object()->config().elefant_foot_compensation.value == 0));
+}
+
+void Layer::backup_untyped_slices()
+{
+    if (layer_needs_raw_backup(this)) {
         for (LayerRegion *layerm : m_regions)
-            // without safety offset, artifacts are generated (upstream Slic3r GH #2494)
-            layerm->slices.set(union_ex(to_polygons(std::move(layerm->slices.surfaces)), true), stInternal);
+            layerm->raw_slices = to_expolygons(layerm->slices.surfaces);
+    } else {
+        assert(m_regions.size() == 1);
+        m_regions.front()->raw_slices.clear();
+    }
+}
+
+void Layer::restore_untyped_slices()
+{
+    if (layer_needs_raw_backup(this)) {
+        for (LayerRegion *layerm : m_regions)
+            layerm->slices.set(layerm->raw_slices, stInternal);
+    } else {
+        assert(m_regions.size() == 1);
+        m_regions.front()->slices.set(this->lslices, stInternal);
     }
 }
 
@@ -132,16 +143,20 @@ void Layer::make_perimeters()
 	            if (! (*it)->slices.empty()) {
 		            LayerRegion* other_layerm = *it;
 		            const PrintRegionConfig &other_config = other_layerm->region()->config();
-		            if (config.perimeter_extruder   == other_config.perimeter_extruder
-		                && config.perimeters        == other_config.perimeters
-		                && config.perimeter_speed   == other_config.perimeter_speed
-		                && config.external_perimeter_speed == other_config.external_perimeter_speed
-		                && config.gap_fill_speed    == other_config.gap_fill_speed
-		                && config.overhangs         == other_config.overhangs
+		            if (config.perimeter_extruder             == other_config.perimeter_extruder
+		                && config.perimeters                  == other_config.perimeters
+		                && config.perimeter_speed             == other_config.perimeter_speed
+		                && config.external_perimeter_speed    == other_config.external_perimeter_speed
+		                && (config.gap_fill_enabled ? config.gap_fill_speed.value : 0.) == 
+                           (other_config.gap_fill_enabled ? other_config.gap_fill_speed.value : 0.)
+		                && config.overhangs                   == other_config.overhangs
 		                && config.opt_serialize("perimeter_extrusion_width") == other_config.opt_serialize("perimeter_extrusion_width")
-		                && config.thin_walls        == other_config.thin_walls
-		                && config.external_perimeters_first == other_config.external_perimeters_first
-		                && config.infill_overlap    == other_config.infill_overlap)
+		                && config.thin_walls                  == other_config.thin_walls
+		                && config.external_perimeters_first   == other_config.external_perimeters_first
+		                && config.infill_overlap              == other_config.infill_overlap
+                        && config.fuzzy_skin                  == other_config.fuzzy_skin
+                        && config.fuzzy_skin_thickness        == other_config.fuzzy_skin_thickness
+                        && config.fuzzy_skin_point_dist       == other_config.fuzzy_skin_point_dist)
 		            {
 			 			other_layerm->perimeters.clear();
 			 			other_layerm->fills.clear();

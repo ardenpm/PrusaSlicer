@@ -43,6 +43,12 @@ enum AuthorizationType {
     atKeyPassword, atUserPassword
 };
 
+enum class FuzzySkinType {
+    None,
+    External,
+    All,
+};
+
 enum InfillPattern : int {
     ipRectilinear, ipMonotonic, ipAlignedRectilinear, ipGrid, ipTriangles, ipStars, ipCubic, ipLine, ipConcentric, ipHoneycomb, ip3DHoneycomb,
     ipGyroid, ipHilbertCurve, ipArchimedeanChords, ipOctagramSpiral, ipAdaptiveCubic, ipSupportCubic, ipCount,
@@ -80,6 +86,13 @@ enum SLAPillarConnectionMode {
     slapcmZigZag,
     slapcmCross,
     slapcmDynamic
+};
+
+enum BrimType {
+    btNoBrim,
+    btOuterOnly,
+    btInnerOnly,
+    btOuterAndInner,
 };
 
 template<> inline const t_config_enum_values& ConfigOptionEnum<PrinterTechnology>::get_enum_values() {
@@ -136,6 +149,16 @@ template<> inline const t_config_enum_values& ConfigOptionEnum<AuthorizationType
     if (keys_map.empty()) {
         keys_map["key"]             = atKeyPassword;
         keys_map["user"]            = atUserPassword;
+    }
+    return keys_map;
+}
+
+template<> inline const t_config_enum_values& ConfigOptionEnum<FuzzySkinType>::get_enum_values() {
+    static t_config_enum_values keys_map;
+    if (keys_map.empty()) {
+        keys_map["none"]                 = int(FuzzySkinType::None);
+        keys_map["external"]             = int(FuzzySkinType::External);
+        keys_map["all"]                  = int(FuzzySkinType::All);
     }
     return keys_map;
 }
@@ -214,6 +237,17 @@ template<> inline const t_config_enum_values& ConfigOptionEnum<SLAPillarConnecti
     return keys_map;
 }
 
+template<> inline const t_config_enum_values& ConfigOptionEnum<BrimType>::get_enum_values() {
+    static const t_config_enum_values keys_map = {
+        {"no_brim", btNoBrim},
+        {"outer_only", btOuterOnly},
+        {"inner_only", btInnerOnly},
+        {"outer_and_inner", btOuterAndInner}
+    };
+
+    return keys_map;
+}
+
 // Defines each and every confiuration option of Slic3r, including the properties of the GUI dialogs.
 // Does not store the actual values, but defines default values.
 class PrintConfigDef : public ConfigDef
@@ -246,7 +280,7 @@ extern const PrintConfigDef print_config_def;
 
 class StaticPrintConfig;
 
-PrinterTechnology printer_technology(const ConfigBase &cfg);
+// Minimum object distance for arrangement, based on printer technology.
 double min_object_distance(const ConfigBase &cfg);
 
 // Slic3r dynamic configuration, used to override the configuration
@@ -427,6 +461,9 @@ class PrintObjectConfig : public StaticPrintConfig
 {
     STATIC_PRINT_CONFIG_CACHE(PrintObjectConfig)
 public:
+    ConfigOptionFloat               brim_offset;
+    ConfigOptionEnum<BrimType>      brim_type;
+    ConfigOptionFloat               brim_width;
     ConfigOptionBool                clip_multipart_objects;
     ConfigOptionBool                dont_support_bridges;
     ConfigOptionFloat               elefant_foot_compensation;
@@ -472,6 +509,9 @@ public:
 protected:
     void initialize(StaticCacheBase &cache, const char *base_ptr)
     {
+        OPT_PTR(brim_offset);
+        OPT_PTR(brim_type);
+        OPT_PTR(brim_width);
         OPT_PTR(clip_multipart_objects);
         OPT_PTR(dont_support_bridges);
         OPT_PTR(elefant_foot_compensation);
@@ -530,8 +570,13 @@ public:
     ConfigOptionFloat               fill_angle;
     ConfigOptionPercent             fill_density;
     ConfigOptionEnum<InfillPattern> fill_pattern;
+    ConfigOptionEnum<FuzzySkinType> fuzzy_skin;
+    ConfigOptionFloat               fuzzy_skin_thickness;
+    ConfigOptionFloat               fuzzy_skin_point_dist;
+    ConfigOptionBool                gap_fill_enabled;
     ConfigOptionFloat               gap_fill_speed;
     ConfigOptionFloatOrPercent      infill_anchor;
+    ConfigOptionFloatOrPercent      infill_anchor_max;
     ConfigOptionInt                 infill_extruder;
     ConfigOptionFloatOrPercent      infill_extrusion_width;
     ConfigOptionInt                 infill_every_layers;
@@ -582,8 +627,13 @@ protected:
         OPT_PTR(fill_angle);
         OPT_PTR(fill_density);
         OPT_PTR(fill_pattern);
+        OPT_PTR(fuzzy_skin);
+        OPT_PTR(fuzzy_skin_thickness);
+        OPT_PTR(fuzzy_skin_point_dist);
+        OPT_PTR(gap_fill_enabled);
         OPT_PTR(gap_fill_speed);
         OPT_PTR(infill_anchor);
+        OPT_PTR(infill_anchor_max);
         OPT_PTR(infill_extruder);
         OPT_PTR(infill_extrusion_width);
         OPT_PTR(infill_every_layers);
@@ -826,11 +876,11 @@ class PrintConfig : public MachineEnvelopeConfig, public GCodeConfig
 public:
 
     ConfigOptionBool                avoid_crossing_perimeters;
+    ConfigOptionFloatOrPercent      avoid_crossing_perimeters_max_detour;
     ConfigOptionPoints              bed_shape;
     ConfigOptionInts                bed_temperature;
     ConfigOptionFloat               bridge_acceleration;
     ConfigOptionInts                bridge_fan_speed;
-    ConfigOptionFloat               brim_width;
     ConfigOptionBool                complete_objects;
     ConfigOptionFloats              colorprint_heights;
     ConfigOptionBools               cooling;
@@ -850,6 +900,7 @@ public:
     ConfigOptionFloatOrPercent      first_layer_extrusion_width;
     ConfigOptionFloatOrPercent      first_layer_speed;
     ConfigOptionInts                first_layer_temperature;
+    ConfigOptionInts                full_fan_speed_layer;
     ConfigOptionFloat               infill_acceleration;
     ConfigOptionBool                infill_first;
     ConfigOptionInts                max_fan_speed;
@@ -899,11 +950,11 @@ protected:
         this->MachineEnvelopeConfig::initialize(cache, base_ptr);
         this->GCodeConfig::initialize(cache, base_ptr);
         OPT_PTR(avoid_crossing_perimeters);
+        OPT_PTR(avoid_crossing_perimeters_max_detour);
         OPT_PTR(bed_shape);
         OPT_PTR(bed_temperature);
         OPT_PTR(bridge_acceleration);
         OPT_PTR(bridge_fan_speed);
-        OPT_PTR(brim_width);
         OPT_PTR(complete_objects);
         OPT_PTR(colorprint_heights);
         OPT_PTR(cooling);
@@ -923,6 +974,7 @@ protected:
         OPT_PTR(first_layer_extrusion_width);
         OPT_PTR(first_layer_speed);
         OPT_PTR(first_layer_temperature);
+        OPT_PTR(full_fan_speed_layer);
         OPT_PTR(infill_acceleration);
         OPT_PTR(infill_first);
         OPT_PTR(max_fan_speed);

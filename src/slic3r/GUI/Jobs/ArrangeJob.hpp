@@ -1,17 +1,13 @@
 #ifndef ARRANGEJOB_HPP
 #define ARRANGEJOB_HPP
 
-#include "Job.hpp"
+#include "PlaterJob.hpp"
 #include "libslic3r/Arrange.hpp"
 
 namespace Slic3r { namespace GUI {
 
-class Plater;
-
-class ArrangeJob : public Job
+class ArrangeJob : public PlaterJob
 {
-    Plater *m_plater;
-    
     using ArrangePolygon = arrangement::ArrangePolygon;
     using ArrangePolygons = arrangement::ArrangePolygons;
 
@@ -30,10 +26,12 @@ class ArrangeJob : public Job
 protected:
     
     void prepare() override;
+
+    void on_exception(const std::exception_ptr &) override;
     
 public:
     ArrangeJob(std::shared_ptr<ProgressIndicator> pri, Plater *plater)
-        : Job{std::move(pri)}, m_plater{plater}
+        : PlaterJob{std::move(pri), plater}
     {}
     
     int status_range() const override
@@ -47,7 +45,6 @@ public:
 };
 
 std::optional<arrangement::ArrangePolygon> get_wipe_tower_arrangepoly(const Plater &);
-void apply_wipe_tower_arrangepoly(Plater &plater, const arrangement::ArrangePolygon &ap);
 
 // The gap between logical beds in the x axis expressed in ratio of
 // the current bed width.
@@ -56,20 +53,36 @@ static const constexpr double LOGICAL_BED_GAP = 1. / 5.;
 // Stride between logical beds
 double bed_stride(const Plater *plater);
 
+template<class T> struct PtrWrapper
+{
+    T *ptr;
+
+    explicit PtrWrapper(T *p) : ptr{p} {}
+
+    arrangement::ArrangePolygon get_arrange_polygon() const
+    {
+        return ptr->get_arrange_polygon();
+    }
+
+    void apply_arrange_result(const Vec2d &t, double rot)
+    {
+        ptr->apply_arrange_result(t, rot);
+    }
+};
+
 // Set up arrange polygon for a ModelInstance and Wipe tower
 template<class T>
-arrangement::ArrangePolygon get_arrange_poly(T *obj, const Plater *plater)
+arrangement::ArrangePolygon get_arrange_poly(T obj, const Plater *plater)
 {
     using ArrangePolygon = arrangement::ArrangePolygon;
 
-    ArrangePolygon ap = obj->get_arrange_polygon();
-    ap.priority       = 0;
+    ArrangePolygon ap = obj.get_arrange_polygon();
     ap.bed_idx        = ap.translation.x() / bed_stride(plater);
     ap.setter         = [obj, plater](const ArrangePolygon &p) {
         if (p.is_arranged()) {
             Vec2d t = p.translation.cast<double>();
             t.x() += p.bed_idx * bed_stride(plater);
-            obj->apply_arrange_result(t, p.rotation);
+            T{obj}.apply_arrange_result(t, p.rotation);
         }
     };
 

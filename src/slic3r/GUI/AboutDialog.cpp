@@ -4,7 +4,10 @@
 #include "libslic3r/Utils.hpp"
 #include "GUI.hpp"
 #include "GUI_App.hpp"
+#include "MainFrame.hpp"
+#include "format.hpp"
 
+#include <wx/clipbrd.h>
 
 namespace Slic3r { 
 namespace GUI {
@@ -37,7 +40,7 @@ void AboutDialogLogo::onRepaint(wxEvent &event)
 // CopyrightsDialog
 // -----------------------------------------
 CopyrightsDialog::CopyrightsDialog()
-    : DPIDialog((wxWindow*)wxGetApp().mainframe, wxID_ANY, from_u8((boost::format("%1% - %2%")
+    : DPIDialog(static_cast<wxWindow*>(wxGetApp().mainframe), wxID_ANY, from_u8((boost::format("%1% - %2%")
         % (wxGetApp().is_editor() ? SLIC3R_APP_NAME : GCODEVIEWER_APP_NAME)
         % _utf8(L("Portions copyright"))).str()),
         wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
@@ -96,8 +99,6 @@ void CopyrightsDialog::fill_entries()
                               "2002 - 2007, Marcelo E.Magallon; "
                               "2002, Lev Povalahev"                         , "http://glew.sourceforge.net/" },
         { "Libigl"          , "2013 Alec Jacobson and others"               , "https://libigl.github.io/" },
-        { "Poly2Tri"        , "2009-2018, Poly2Tri Contributors"            , "https://github.com/jhasse/poly2tri" },
-        { "PolyPartition"   , "2011 Ivan Fratric"                           , "https://github.com/ivanfratric/polypartition" },
         { "Qhull"           , "1993-2015 C.B.Barber Arlington and "
                               "University of Minnesota"                     , "http://qhull.org/" },
         { "SemVer"          , "2015-2017 Tomas Aparicio"                    , "https://semver.org/" },
@@ -150,9 +151,8 @@ wxString CopyrightsDialog::get_html_text()
                     , entry.link, entry.lib_name);
 
         if (!entry.copyright.empty())
-            text += wxString::Format(
-                    "%s %s"
-                    "<br/><br/>"
+            text += format_wxstr(
+                    "%1% %2%<br/><br/>"
                     , copyright_str, entry.copyright);
     }
 
@@ -201,7 +201,7 @@ void CopyrightsDialog::onCloseDialog(wxEvent &)
 }
 
 AboutDialog::AboutDialog()
-    : DPIDialog((wxWindow*)wxGetApp().mainframe, wxID_ANY, from_u8((boost::format(_utf8(L("About %s"))) % (wxGetApp().is_editor() ? SLIC3R_APP_NAME : GCODEVIEWER_APP_NAME)).str()), wxDefaultPosition,
+    : DPIDialog(static_cast<wxWindow*>(wxGetApp().mainframe), wxID_ANY, from_u8((boost::format(_utf8(L("About %s"))) % (wxGetApp().is_editor() ? SLIC3R_APP_NAME : GCODEVIEWER_APP_NAME)).str()), wxDefaultPosition,
         wxDefaultSize, /*wxCAPTION*/wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
     SetFont(wxGetApp().normal_font());
@@ -297,6 +297,11 @@ AboutDialog::AboutDialog()
     auto copy_rights_btn = new wxButton(this, m_copy_rights_btn_id, _L("Portions copyright")+dots);
     buttons->Insert(0, copy_rights_btn, 0, wxLEFT, 5);
     copy_rights_btn->Bind(wxEVT_BUTTON, &AboutDialog::onCopyrightBtn, this);
+
+    m_copy_version_btn_id = NewControlId();
+    auto copy_version_btn = new wxButton(this, m_copy_version_btn_id, _L("Copy Version Info"));
+    buttons->Insert(1, copy_version_btn, 0, wxLEFT, 5);
+    copy_version_btn->Bind(wxEVT_BUTTON, &AboutDialog::onCopyToClipboard, this);
     
     this->SetEscapeId(wxID_CLOSE);
     this->Bind(wxEVT_BUTTON, &AboutDialog::onCloseDialog, this, wxID_CLOSE);
@@ -346,6 +351,13 @@ void AboutDialog::onCopyrightBtn(wxEvent &)
 {
     CopyrightsDialog dlg;
     dlg.ShowModal();
+}
+
+void AboutDialog::onCopyToClipboard(wxEvent&)
+{
+    wxTheClipboard->Open();
+    wxTheClipboard->SetData(new wxTextDataObject(_L("Version") + " " + std::string(SLIC3R_VERSION)));
+    wxTheClipboard->Close();
 }
 
 } // namespace GUI

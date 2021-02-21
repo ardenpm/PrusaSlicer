@@ -19,10 +19,15 @@
 #include "FillRectilinear.hpp"
 
 // #define SLIC3R_DEBUG
+// #define INFILL_DEBUG_OUTPUT
 
 // Make assert active if SLIC3R_DEBUG
 #ifdef SLIC3R_DEBUG
     #undef NDEBUG
+    #include "SVG.hpp"
+#endif
+
+#if defined(SLIC3R_DEBUG) || defined(INFILL_DEBUG_OUTPUT)
     #include "SVG.hpp"
 #endif
 
@@ -510,8 +515,7 @@ static inline bool intersection_on_prev_next_vertical_line_valid(
     const SegmentedIntersectionLine &vline_other = segs[side == SegmentIntersection::Side::Right ? (iVerticalLine + 1) : (iVerticalLine - 1)];
     const SegmentIntersection       &it_other    = vline_other.intersections[iIntersectionOther];
     assert(it_other.is_inner());
-    assert(iIntersectionOther > 0);
-    assert(iIntersectionOther + 1 < vline_other.intersections.size());
+    assert(iIntersectionOther > 0 && size_t(iIntersectionOther + 1) < vline_other.intersections.size());
     // Is iIntersectionOther at the boundary of a vertical segment?
     const SegmentIntersection       &it_other2   = vline_other.intersections[it_other.is_low() ? iIntersectionOther - 1 : iIntersectionOther + 1];
     if (it_other2.is_inner())
@@ -1171,8 +1175,7 @@ static void pinch_contours_insert_phony_outer_intersections(std::vector<Segmente
                     assert(it->type == SegmentIntersection::OUTER_LOW);
                     ++ it;
                 } else {
-                    auto lo  = it;
-                    assert(lo->type == SegmentIntersection::INNER_LOW);
+                    assert(it->type == SegmentIntersection::INNER_LOW);
                     auto hi  = ++ it;
                     assert(hi->type == SegmentIntersection::INNER_HIGH);
                     auto lo2 = ++ it;
@@ -1181,11 +1184,11 @@ static void pinch_contours_insert_phony_outer_intersections(std::vector<Segmente
                         // In that case one shall insert a phony OUTER_HIGH / OUTER_LOW pair.
                         int up = hi->vertical_up();
                         int dn = lo2->vertical_down();
-#ifndef _NDEBUG
+
                         assert(up == -1 || up > 0);
                         assert(dn == -1 || dn >= 0);
                         assert((up == -1 && dn == -1) || (dn + 1 == up));
-#endif // _NDEBUG
+
                         bool pinched = dn + 1 != up;
                         if (pinched) {
                             // hi is not connected with its inner contour to lo2.
@@ -1232,7 +1235,7 @@ static void pinch_contours_insert_phony_outer_intersections(std::vector<Segmente
                 for (SegmentIntersection &ip : segs[i_vline - 1].intersections)
                     if (ip.has_right_horizontal())
                         ip.next_on_contour = map[ip.next_on_contour];
-                if (i_vline < segs.size()) {
+                if (i_vline + 1 < segs.size()) {
                     // Reindex references on next intersection line.
                     for (SegmentIntersection &ip : segs[i_vline + 1].intersections)
                         if (ip.has_left_horizontal())
@@ -1261,10 +1264,6 @@ static const SegmentIntersection& end_of_vertical_run_raw(const SegmentIntersect
         assert(it->type == SegmentIntersection::INNER_HIGH);
     }
     return *it;
-}
-static SegmentIntersection& end_of_vertical_run_raw(SegmentIntersection &start)
-{
-	return const_cast<SegmentIntersection&>(end_of_vertical_run_raw(std::as_const(start)));
 }
 
 // Find the last INNER_HIGH intersection starting with INNER_LOW, that is followed by OUTER_HIGH intersection, traversing vertical up contours if enabled.
@@ -1378,7 +1377,7 @@ static void traverse_graph_generate_polylines(
         bool 					   try_connect 	= false;
         if (going_up) {
             assert(! it->consumed_vertical_up);
-            assert(i_intersection + 1 < vline.intersections.size());
+            assert(size_t(i_intersection + 1) < vline.intersections.size());
             // Step back to the beginning of the vertical segment to mark it as consumed.
             if (it->is_inner()) {
                 assert(i_intersection > 0);
@@ -1390,7 +1389,7 @@ static void traverse_graph_generate_polylines(
                 it->consumed_vertical_up = true;
                 ++ it;
                 ++ i_intersection;
-                assert(i_intersection < vline.intersections.size());
+                assert(size_t(i_intersection) < vline.intersections.size());
             } while (it->type != SegmentIntersection::OUTER_HIGH);
             if ((it - 1)->is_inner()) {
                 // Step back.
@@ -1810,7 +1809,7 @@ static std::vector<MonotonicRegion> generate_montonous_regions(std::vector<Segme
         return false;
     };
 #else
-    auto test_overlap = [](int, int, int) { return false; };
+    [[maybe_unused]] auto test_overlap = [](int, int, int) { return false; };
 #endif
 
     for (int i_vline_seed = 0; i_vline_seed < int(segs.size()); ++ i_vline_seed) {
@@ -1870,6 +1869,60 @@ static std::vector<MonotonicRegion> generate_montonous_regions(std::vector<Segme
     return monotonic_regions;
 }
 
+#ifdef INFILL_DEBUG_OUTPUT
+static void export_monotonous_regions_to_svg(
+    const ExPolygonWithOffset                       &poly_with_offset,
+    const std::vector<SegmentedIntersectionLine>    &segs,
+    const std::vector<MonotonicRegion>              &monotonic_regions,
+    const std::string                               &path)
+{
+    BoundingBox bbox = get_extents(poly_with_offset.polygons_src);
+    bbox.offset(scale_(3.));
+
+    ::Slic3r::SVG svg(path, bbox);
+    svg.draw(poly_with_offset.polygons_src);
+    svg.draw_outline(poly_with_offset.polygons_src, "green");
+    svg.draw_outline(poly_with_offset.polygons_outer, "green");
+    svg.draw_outline(poly_with_offset.polygons_inner, "green");
+
+    // Draw the infill line candidates in red.
+    for (const SegmentedIntersectionLine &sil : segs) {
+        for (size_t i = 0; i + 1 < sil.intersections.size(); ++ i)
+            if (sil.intersections[i].type == SegmentIntersection::INNER_LOW && sil.intersections[i + 1].type == SegmentIntersection::INNER_HIGH) {
+                Line l(Point(sil.pos, sil.intersections[i].pos()), Point(sil.pos, sil.intersections[i + 1].pos()));
+                svg.draw(l, "blue");
+            } else if (sil.intersections[i].type == SegmentIntersection::INNER_HIGH && sil.intersections[i].has_vertical_up()) {
+                std::string color;
+                const SegmentIntersection *it = &sil.intersections[i];
+                switch (it->vertical_up_quality()) {
+                case SegmentIntersection::LinkQuality::Invalid:     color = "red"; break;
+                case SegmentIntersection::LinkQuality::Valid:       color = "blue"; break;
+                case SegmentIntersection::LinkQuality::TooLong:
+                default:                                            color = "yellow"; break;
+                }
+                Polyline polyline;
+                polyline.points.push_back({ sil.pos, it->pos() });
+                emit_perimeter_segment_on_vertical_line(poly_with_offset, segs, &sil - segs.data() , it->iContour, it - sil.intersections.data(), it->vertical_up(), polyline, it->has_left_vertical_up());
+                svg.draw(polyline, color, scale_(0.05));
+            }
+    }
+
+    // Draw the monotonic regions.
+    for (const MonotonicRegion &region : monotonic_regions) {
+        auto draw_boundary_line = [&poly_with_offset, &segs, &svg](const MonotonicRegion::Boundary &boundary) {
+            const SegmentedIntersectionLine &sil = segs[boundary.vline];
+            for (size_t i = boundary.low; i < boundary.high; ++ i)
+                if (sil.intersections[i].type == SegmentIntersection::INNER_LOW && sil.intersections[i + 1].type == SegmentIntersection::INNER_HIGH) {
+                    Line l(Point(sil.pos, sil.intersections[i].pos()), Point(sil.pos, sil.intersections[i + 1].pos()));
+                    svg.draw(l, "red", scale_(0.05));
+                }
+        };
+        draw_boundary_line(region.left);
+        draw_boundary_line(region.right);
+    }
+}
+#endif // INFILL_DEBUG_OUTPUT
+
 // Traverse path, calculate length of the draw for the purpose of optimization.
 // This function is very similar to polylines_from_paths() in the way how it traverses the path, but
 // polylines_from_paths() emits a path, while this function just calculates the path length.
@@ -1928,14 +1981,22 @@ static float montonous_region_path_length(const MonotonicRegion &region, bool di
         	break;
 
         int inext = it->right_horizontal();
-        if (inext != -1 && it->next_on_contour_quality == SegmentIntersection::LinkQuality::Valid) {
+        assert(iright != -1);
+        assert(inext == -1 || inext == iright);
+
+        // Find the end of the next overlapping vertical segment.
+        const SegmentedIntersectionLine &vline_right = segs[i_vline + 1];
+        const SegmentIntersection       *right       = going_up ? 
+            &vertical_run_top(vline_right, vline_right.intersections[iright]) : &vertical_run_bottom(vline_right, vline_right.intersections[iright]);
+        i_intersection = int(right - vline_right.intersections.data());
+
+        if (inext == i_intersection && it->next_on_contour_quality == SegmentIntersection::LinkQuality::Valid) {
         	// Summarize length of the connection line along the perimeter.
         	//FIXME should it be weighted with a lower weight than non-extruding connection line? What weight?
         	// Taking half of the length.
     		total_length += 0.5f * float(measure_perimeter_horizontal_segment_length(poly_with_offset, segs, i_vline, it - vline.intersections.data(), inext));
 			// Don't add distance to the next vertical line start to the total length.
-			no_perimeter   = false;
-            i_intersection = inext;
+			no_perimeter = false;
         } else {
 	        // Finish the current vertical line,
         	going_up ? ++ it : -- it;
@@ -1945,14 +2006,6 @@ static float montonous_region_path_length(const MonotonicRegion &region, bool di
 			last_point = Vec2f(vline.pos, it->pos());
 			// Remember to add distance to the last point.
 			no_perimeter = true;
-			if (inext == -1) {
-				// Find the end of the next overlapping vertical segment.
-		        const SegmentedIntersectionLine &vline_right = segs[i_vline + 1];
-                const SegmentIntersection       *right       = going_up ? 
-                    &vertical_run_top(vline_right, vline_right.intersections[iright]) : &vertical_run_bottom(vline_right, vline_right.intersections[iright]);
-				i_intersection = int(right - vline_right.intersections.data());
-			} else
-	            i_intersection = inext;
         }
 
         ++ i_vline;
@@ -1974,8 +2027,7 @@ static void connect_monotonic_regions(std::vector<MonotonicRegion> &regions, con
 		map_intersection_to_region_end.emplace_back(&segs[region.right.vline].intersections[region.right.low], &region);
 	}
 	auto intersections_lower = [](const MapType &l, const MapType &r){ return l.first < r.first ; };
-	auto intersections_equal = [](const MapType &l, const MapType &r){ return l.first == r.first ; };
-	std::sort(map_intersection_to_region_start.begin(), map_intersection_to_region_start.end(), intersections_lower);
+    std::sort(map_intersection_to_region_start.begin(), map_intersection_to_region_start.end(), intersections_lower);
 	std::sort(map_intersection_to_region_end.begin(), map_intersection_to_region_end.end(), intersections_lower);
 
 	// Scatter links to neighboring regions.
@@ -2126,15 +2178,15 @@ static std::vector<MonotonicRegionLink> chain_monotonic_regions(
 	float best_path_length = std::numeric_limits<float>::max();
 
 	struct NextCandidate {
-        MonotonicRegion    *region;
+        MonotonicRegion    *region = nullptr;
         AntPath  	        *link;
         AntPath  	        *link_flipped;
         float                probability;
-		bool 		         dir;
+        bool 		         dir = false;
 	};
 	std::vector<NextCandidate> next_candidates;
 
-    auto validate_unprocessed = 
+    [[maybe_unused]]auto validate_unprocessed =
 #ifdef NDEBUG
         []() { return true; };
 #else
@@ -2163,7 +2215,7 @@ static std::vector<MonotonicRegionLink> chain_monotonic_regions(
                 } else {
                     // Some left neihgbor should not be processed yet.
                     assert(left_neighbors_unprocessed[i] > 1);
-                    size_t num_predecessors_unprocessed = 0;
+                    int32_t num_predecessors_unprocessed = 0;
                     bool   has_left_last_on_path       = false;
                     for (const MonotonicRegion* left : region.left_neighbors) {
                         size_t iprev = left - regions.data();
@@ -2193,22 +2245,22 @@ static std::vector<MonotonicRegionLink> chain_monotonic_regions(
 #endif /* NDEBUG */
 
 	// How many times to repeat the ant simulation (number of ant generations).
-	constexpr int   num_rounds = 25;
+	constexpr int const   num_rounds = 25;
 	// After how many rounds without an improvement to exit?
-	constexpr int 	num_rounds_no_change_exit = 8;
+	constexpr int const   num_rounds_no_change_exit = 8;
 	// With how many ants each of the run will be performed?
-	const int   	num_ants = std::min(int(regions.size()), 10);
+	const int             num_ants = std::min(int(regions.size()), 10);
 	// Base (initial) pheromone level. This value will be adjusted based on the length of the first greedy path found.
-	float           pheromone_initial_deposit = 0.5f;
+	float                 pheromone_initial_deposit = 0.5f;
 	// Evaporation rate of pheromones.
-	constexpr float pheromone_evaporation = 0.1f;
+	constexpr float const pheromone_evaporation = 0.1f;
     // Evaporation rate to diversify paths taken by individual ants.
-    constexpr float pheromone_diversification = 0.1f;
+    constexpr float const pheromone_diversification = 0.1f;
 	// Probability at which to take the next best path. Otherwise take the the path based on the cost distribution.
-	constexpr float probability_take_best = 0.9f;
+	constexpr float const probability_take_best = 0.9f;
 	// Exponents of the cost function.
-	constexpr float pheromone_alpha = 1.f; // pheromone exponent
-	constexpr float pheromone_beta  = 2.f; // attractiveness weighted towards edge length
+	constexpr float const pheromone_alpha = 1.f; // pheromone exponent
+	constexpr float const pheromone_beta  = 2.f; // attractiveness weighted towards edge length
 
     AntPathMatrix path_matrix(regions, poly_with_offset, segs, pheromone_initial_deposit);
 
@@ -2231,8 +2283,7 @@ static std::vector<MonotonicRegionLink> chain_monotonic_regions(
 			NextCandidate 				 next_candidate;
 			next_candidate.probability = 0;
 			for (MonotonicRegion *next : region.right_neighbors) {
-				int &unprocessed = left_neighbors_unprocessed[next - regions.data()];
-				assert(unprocessed > 1);
+                assert(left_neighbors_unprocessed[next - regions.data()] > 1);
 				if (left_neighbors_unprocessed[next - regions.data()] == 2) {
 					// Dependencies of the successive blocks are satisfied.
                     AntPath &path1 = path_matrix(region, dir, *next, false);
@@ -2266,6 +2317,7 @@ static std::vector<MonotonicRegionLink> chain_monotonic_regions(
                 queue.pop_back();
             }
 			// Extend the path.
+            assert(next_candidate.region);
 			MonotonicRegion *next_region = next_candidate.region;
 			bool              next_dir    = next_candidate.dir;
             total_length += next_region->length(next_dir) + path_matrix(*path_end.region, path_end.flipped, *next_region, next_dir).length;
@@ -2280,7 +2332,12 @@ static std::vector<MonotonicRegionLink> chain_monotonic_regions(
     }
 
     // Probability (unnormalized) of traversing a link between two monotonic regions.
-	auto path_probability = [pheromone_alpha, pheromone_beta](AntPath &path) {
+	auto path_probability = [
+#ifndef __APPLE__
+        // clang complains when capturing constexpr constants.
+        pheromone_alpha, pheromone_beta
+#endif // __APPLE__
+        ](AntPath &path) {
 		return pow(path.pheromone, pheromone_alpha) * pow(path.visibility, pheromone_beta);
 	};
 
@@ -2493,7 +2550,7 @@ static void polylines_from_paths(const std::vector<MonotonicRegionLink> &path, c
 
 	for (const MonotonicRegionLink &path_segment : path) {
 		MonotonicRegion &region = *path_segment.region;
-		bool 			  dir    = path_segment.flipped;
+		bool 		     dir    = path_segment.flipped;
 
         // From the initial point (i_vline, i_intersection), follow a path.
 		int  i_intersection = region.left_intersection_point(dir);
@@ -2579,11 +2636,19 @@ static void polylines_from_paths(const std::vector<MonotonicRegionLink> &path, c
 	        if (i_vline == region.right.vline)
 	        	break;
 
-	        int inext = it->right_horizontal();
-	        if (inext != -1 && it->next_on_contour_quality == SegmentIntersection::LinkQuality::Valid) {
+            int inext = it->right_horizontal();
+            assert(iright != -1);
+            assert(inext == -1 || inext == iright);
+
+            // Find the end of the next overlapping vertical segment.
+            const SegmentedIntersectionLine &vline_right = segs[i_vline + 1];
+            const SegmentIntersection       *right       = going_up ? 
+                &vertical_run_top(vline_right, vline_right.intersections[iright]) : &vertical_run_bottom(vline_right, vline_right.intersections[iright]);
+            i_intersection = int(right - vline_right.intersections.data());
+
+	        if (inext == i_intersection && it->next_on_contour_quality == SegmentIntersection::LinkQuality::Valid) {
 	        	// Emit a horizontal connection contour.
 	            emit_perimeter_prev_next_segment(poly_with_offset, segs, i_vline, it->iContour, it - vline.intersections.data(), inext, *polyline, true);
-	            i_intersection = inext;
 	        } else {
 		        // Finish the current vertical line,
 	        	going_up ? ++ it : -- it;
@@ -2591,14 +2656,6 @@ static void polylines_from_paths(const std::vector<MonotonicRegionLink> &path, c
 		        assert(it->is_high() == going_up);
 	        	polyline->points.back() = Point(vline.pos, it->pos());
 				finish_polyline();
-				if (inext == -1) {
-					// Find the end of the next overlapping vertical segment.
-			        const SegmentedIntersectionLine &vline_right = segs[i_vline + 1];
-                    const SegmentIntersection       *right       = going_up ? 
-                        &vertical_run_top(vline_right, vline_right.intersections[iright]) : &vertical_run_bottom(vline_right, vline_right.intersections[iright]);
-					i_intersection = int(right - vline_right.intersections.data());
-				} else
-		            i_intersection = inext;
 	        }
 
 	        ++ i_vline;
@@ -2717,6 +2774,12 @@ bool FillRectilinear::fill_surface_by_lines(const Surface *surface, const FillPa
         // Insert phony OUTER_HIGH / OUTER_LOW pairs at the position where the contour is pinched.
         pinch_contours_insert_phony_outer_intersections(segs);
 		std::vector<MonotonicRegion> regions = generate_montonous_regions(segs);
+#ifdef INFILL_DEBUG_OUTPUT
+        {
+            static int iRun;
+            export_monotonous_regions_to_svg(poly_with_offset, segs, regions, debug_out_path("%s-%03d.svg", "MontonousRegions-initial", iRun ++));
+        }
+#endif // INFILL_DEBUG_OUTPUT
 		connect_monotonic_regions(regions, poly_with_offset, segs);
         if (! regions.empty()) {
 		    std::mt19937_64 rng;
@@ -2779,8 +2842,6 @@ bool FillRectilinear::fill_surface_by_multilines(const Surface *surface, FillPar
     coord_t line_spacing = coord_t(scale_(this->spacing) / params.density);
     std::pair<float, Point> rotate_vector = this->_infill_direction(surface);
     for (const SweepParams &sweep : sweep_params) {
-        size_t n_fill_lines_initial = fill_lines.size();
-
         // Rotate polygons so that we can work with vertical lines here
         double angle = rotate_vector.first + sweep.angle_base;
         ExPolygonWithOffset poly_with_offset(poly_with_offset_base, - angle);

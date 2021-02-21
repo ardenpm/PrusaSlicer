@@ -49,8 +49,7 @@ BitmapTextRenderer::~BitmapTextRenderer()
 {
 #ifdef SUPPORTS_MARKUP
     #ifdef wxHAS_GENERIC_DATAVIEWCTRL
-    if (m_markupText)
-        delete m_markupText;
+    delete m_markupText;
     #endif //wxHAS_GENERIC_DATAVIEWCTRL
 #endif // SUPPORTS_MARKUP
 }
@@ -316,7 +315,7 @@ wxWindow* BitmapChoiceRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelR
 
 bool BitmapChoiceRenderer::GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value)
 {
-    wxBitmapComboBox* c = (wxBitmapComboBox*)ctrl;
+    wxBitmapComboBox* c = static_cast<wxBitmapComboBox*>(ctrl);
     int selection = c->GetSelection();
     if (selection < 0)
         return false;

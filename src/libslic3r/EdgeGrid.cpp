@@ -3,16 +3,16 @@
 #include <float.h>
 #include <unordered_map>
 
-#if 0
-// #ifdef SLIC3R_GUI
-#include <wx/image.h>
-#endif /* SLIC3R_GUI */
+#include <png.h>
 
 #include "libslic3r.h"
 #include "ClipperUtils.hpp"
 #include "EdgeGrid.hpp"
 #include "Geometry.hpp"
 #include "SVG.hpp"
+#include "PNGReadWrite.hpp"
+
+// #define EDGE_GRID_DEBUG_OUTPUT
 
 #if 0
 // Enable debugging and assert in this file.
@@ -25,90 +25,89 @@
 
 namespace Slic3r {
 
-EdgeGrid::Grid::Grid() : 
-	m_rows(0), m_cols(0) 
-{
-}
-
-EdgeGrid::Grid::~Grid() 
-{
-	m_contours.clear();
-	m_cell_data.clear();
-	m_cells.clear();
-}
-
 void EdgeGrid::Grid::create(const Polygons &polygons, coord_t resolution)
 {
-	// Count the contours.
-	size_t ncontours = 0;
-	for (size_t j = 0; j < polygons.size(); ++ j)
-		if (! polygons[j].points.empty())
-			++ ncontours;
-
 	// Collect the contours.
-	m_contours.assign(ncontours, nullptr);
-	ncontours = 0;
-	for (size_t j = 0; j < polygons.size(); ++ j)
-		if (! polygons[j].points.empty())
-			m_contours[ncontours ++] = &polygons[j].points;
+	m_contours.clear();
+	m_contours.reserve(std::count_if(polygons.begin(), polygons.end(), [](const Polygon &p) { return ! p.empty(); }));
+	for (const Polygon &polygon : polygons)
+		if (! polygon.empty())
+			m_contours.emplace_back(polygon.points, false);
 
 	create_from_m_contours(resolution);
 }
 
 void EdgeGrid::Grid::create(const std::vector<const Polygon*> &polygons, coord_t resolution)
 {
-	// Count the contours.
-	size_t ncontours = 0;
-	for (size_t j = 0; j < polygons.size(); ++ j)
-		if (! polygons[j]->points.empty())
-			++ ncontours;
-
 	// Collect the contours.
-	m_contours.assign(ncontours, nullptr);
-	ncontours = 0;
-	for (size_t j = 0; j < polygons.size(); ++ j)
-		if (! polygons[j]->points.empty())
-			m_contours[ncontours ++] = &polygons[j]->points;
+	m_contours.clear();
+	m_contours.reserve(std::count_if(polygons.begin(), polygons.end(), [](const Polygon *p) { return ! p->empty(); }));
+	for (const Polygon *polygon : polygons)
+		if (! polygon->empty())
+			m_contours.emplace_back(polygon->points, false);
 
 	create_from_m_contours(resolution);	
 }
 
-void EdgeGrid::Grid::create(const std::vector<Points> &polygons, coord_t resolution)
+void EdgeGrid::Grid::create(const std::vector<Points> &polygons, coord_t resolution, bool open_polylines)
 {
-	// Count the contours.
-	size_t ncontours = 0;
-	for (size_t j = 0; j < polygons.size(); ++ j)
-		if (! polygons[j].empty())
-			++ ncontours;
-
 	// Collect the contours.
-	m_contours.assign(ncontours, nullptr);
-	ncontours = 0;
-	for (size_t j = 0; j < polygons.size(); ++ j)
-		if (! polygons[j].empty())
-			m_contours[ncontours ++] = &polygons[j];
+	m_contours.clear();
+	m_contours.reserve(std::count_if(polygons.begin(), polygons.end(), [](const Points &p) { return p.size() > 1; }));
+	for (const Points &points : polygons) 
+		if (points.size() > 1) {
+			const Point *begin = points.data();
+			const Point *end   = points.data() + points.size();
+			bool 		 open  = open_polylines;
+			if (open_polylines) {
+				if (*begin == end[-1]) {
+					open = false;
+					-- end;
+				}
+			} else
+				assert(*begin != end[-1]);
+			m_contours.emplace_back(begin, end, open);
+		}
+
+	create_from_m_contours(resolution);
+}
+
+void EdgeGrid::Grid::create(const Polygons &polygons, const Polylines &polylines, coord_t resolution)
+{
+	// Collect the contours.
+	m_contours.clear();
+	m_contours.reserve(
+		std::count_if(polygons.begin(), polygons.end(), [](const Polygon &p) { return p.size() > 1; }) +
+		std::count_if(polylines.begin(), polylines.end(), [](const Polyline &p) { return p.size() > 1; }));
+
+	for (const Polyline &polyline : polylines)
+		if (polyline.size() > 1) {
+			const Point *begin = polyline.points.data();
+			const Point *end   = polyline.points.data() + polyline.size();
+			bool 		 open  = true;
+			if (*begin == end[-1]) {
+				open = false;
+				-- end;
+			}
+			m_contours.emplace_back(begin, end, open);
+		}
+
+	for (const Polygon &polygon : polygons)
+		if (polygon.size() > 1)
+			m_contours.emplace_back(polygon.points, false);
 
 	create_from_m_contours(resolution);
 }
 
 void EdgeGrid::Grid::create(const ExPolygon &expoly, coord_t resolution)
 {
-	// Count the contours.
-	size_t ncontours = 0;
-	if (! expoly.contour.points.empty())
-		++ ncontours;
-	for (size_t j = 0; j < expoly.holes.size(); ++ j)
-		if (! expoly.holes[j].points.empty())
-			++ ncontours;
-
-	// Collect the contours.
-	m_contours.assign(ncontours, nullptr);
-	ncontours = 0;
-	if (! expoly.contour.points.empty())
-		m_contours[ncontours++] = &expoly.contour.points;
-	for (size_t j = 0; j < expoly.holes.size(); ++ j)
-		if (! expoly.holes[j].points.empty())
-			m_contours[ncontours++] = &expoly.holes[j].points;
+	m_contours.clear();
+	m_contours.reserve((expoly.contour.empty() ? 0 : 1) + std::count_if(expoly.holes.begin(), expoly.holes.end(), [](const Polygon &p) { return ! p.empty(); }));
+	if (! expoly.contour.empty())
+		m_contours.emplace_back(expoly.contour.points, false);
+	for (const Polygon &hole : expoly.holes)
+		if (! hole.empty())
+			m_contours.emplace_back(hole.points, false);
 
 	create_from_m_contours(resolution);
 }
@@ -117,25 +116,21 @@ void EdgeGrid::Grid::create(const ExPolygons &expolygons, coord_t resolution)
 {
 	// Count the contours.
 	size_t ncontours = 0;
-	for (size_t i = 0; i < expolygons.size(); ++ i) {
-		const ExPolygon &expoly = expolygons[i];
-		if (! expoly.contour.points.empty())
+	for (const ExPolygon &expoly : expolygons) {
+		if (! expoly.contour.empty())
 			++ ncontours;
-		for (size_t j = 0; j < expoly.holes.size(); ++ j)
-			if (! expoly.holes[j].points.empty())
-				++ ncontours;
+		ncontours += std::count_if(expoly.holes.begin(), expoly.holes.end(), [](const Polygon &p) { return ! p.empty(); });
 	}
 
 	// Collect the contours.
-	m_contours.assign(ncontours, nullptr);
-	ncontours = 0;
-	for (size_t i = 0; i < expolygons.size(); ++ i) {
-		const ExPolygon &expoly = expolygons[i];
-		if (! expoly.contour.points.empty())
-			m_contours[ncontours++] = &expoly.contour.points;
-		for (size_t j = 0; j < expoly.holes.size(); ++ j)
-			if (! expoly.holes[j].points.empty())
-				m_contours[ncontours++] = &expoly.holes[j].points;
+	m_contours.clear();
+	m_contours.reserve(ncontours);
+	for (const ExPolygon &expoly : expolygons) {
+		if (! expoly.contour.empty())
+			m_contours.emplace_back(expoly.contour.points, false);
+		for (const Polygon &hole : expoly.holes)
+			if (! hole.empty())
+				m_contours.emplace_back(hole.points, false);
 	}
 
 	create_from_m_contours(resolution);
@@ -151,11 +146,13 @@ void EdgeGrid::Grid::create_from_m_contours(coord_t resolution)
 {
 	assert(resolution > 0);
 	// 1) Measure the bounding box.
-	for (size_t i = 0; i < m_contours.size(); ++ i) {
-		const Slic3r::Points &pts = *m_contours[i];
-		for (size_t j = 0; j < pts.size(); ++ j)
-			m_bbox.merge(pts[j]);
+	for (const Contour &contour : m_contours) {
+		assert(contour.num_segments() > 0);
+		assert(*contour.begin() != contour.end()[-1]);
+		for (const Slic3r::Point &pt : contour) 
+			m_bbox.merge(pt);
 	}
+
 	coord_t eps = 16;
 	m_bbox.min(0) -= eps;
 	m_bbox.min(1) -= eps;
@@ -170,11 +167,11 @@ void EdgeGrid::Grid::create_from_m_contours(coord_t resolution)
 
 	// 3) First round of contour rasterization, count the edges per grid cell.
 	for (size_t i = 0; i < m_contours.size(); ++ i) {
-		const Slic3r::Points &pts = *m_contours[i];
-		for (size_t j = 0; j < pts.size(); ++ j) {
+		const Contour &contour = m_contours[i];
+		for (size_t j = 0; j < contour.num_segments(); ++ j) {
 			// End points of the line segment.
-			Slic3r::Point p1(pts[j]);
-			Slic3r::Point p2 = pts[(j + 1 == pts.size()) ? 0 : j + 1];
+			Slic3r::Point p1(contour.segment_start(j));
+			Slic3r::Point p2(contour.segment_end(j));
 			p1(0) -= m_bbox.min(0);
 			p1(1) -= m_bbox.min(1);
 			p2(0) -= m_bbox.min(0);
@@ -333,9 +330,9 @@ void EdgeGrid::Grid::create_from_m_contours(coord_t resolution)
 
 	assert(visitor.i == 0);
 	for (; visitor.i < m_contours.size(); ++ visitor.i) {
-		const Slic3r::Points &pts = *m_contours[visitor.i];
-		for (visitor.j = 0; visitor.j < pts.size(); ++ visitor.j)
-			this->visit_cells_intersecting_line(pts[visitor.j], pts[(visitor.j + 1 == pts.size()) ? 0 : visitor.j + 1], visitor);
+		const Contour &contour = m_contours[visitor.i];
+		for (visitor.j = 0; visitor.j < contour.num_segments(); ++ visitor.j)
+			this->visit_cells_intersecting_line(contour.segment_start(visitor.j), contour.segment_end(visitor.j), visitor);
 	}
 }
 
@@ -677,6 +674,11 @@ struct PropagateDanielssonSingleVStep3 {
 
 void EdgeGrid::Grid::calculate_sdf()
 {
+#ifdef EDGE_GRID_DEBUG_OUTPUT
+	static int iRun = 0;
+	++ iRun;
+#endif
+
 	// 1) Initialize a signum and an unsigned vector to a zero iso surface.
 	size_t nrows = m_rows + 1;
 	size_t ncols = m_cols + 1;
@@ -696,11 +698,12 @@ void EdgeGrid::Grid::calculate_sdf()
 			const Cell &cell = m_cells[r * m_cols + c];
 			// For each segment in the cell:
 			for (size_t i = cell.begin; i != cell.end; ++ i) {
-				const Slic3r::Points &pts = *m_contours[m_cell_data[i].first];
+				const Contour &contour = m_contours[m_cell_data[i].first];
+				assert(contour.closed());
 				size_t ipt = m_cell_data[i].second;
 				// End points of the line segment.
-				const Slic3r::Point &p1 = pts[ipt];
-				const Slic3r::Point &p2 = pts[(ipt + 1 == pts.size()) ? 0 : ipt + 1];
+				const Slic3r::Point &p1 = contour.segment_start(ipt);
+				const Slic3r::Point &p2 = contour.segment_end(ipt);
 				// Segment vector
 				const Slic3r::Point v_seg = p2 - p1;
 				// l2 of v_seg
@@ -724,7 +727,7 @@ void EdgeGrid::Grid::calculate_sdf()
 							double dabs = sqrt(int64_t(v_pt(0)) * int64_t(v_pt(0)) + int64_t(v_pt(1)) * int64_t(v_pt(1)));
 							if (dabs < d_min) {
 								// Previous point.
-								const Slic3r::Point &p0 = pts[(ipt == 0) ? (pts.size() - 1) : ipt - 1];
+								const Slic3r::Point &p0 = contour.segment_prev(ipt);
 								Slic3r::Point v_seg_prev = p1 - p0;
 								int64_t t2_pt = int64_t(v_seg_prev(0)) * int64_t(v_pt(0)) + int64_t(v_seg_prev(1)) * int64_t(v_pt(1));
 								if (t2_pt > 0) {
@@ -774,19 +777,12 @@ void EdgeGrid::Grid::calculate_sdf()
 		}
 	}
 
-#if 0
-	static int iRun = 0;
-	++ iRun;
-    if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
-        wxImage::AddHandler(new wxPNGHandler);
-//#ifdef SLIC3R_GUI
+#ifdef EDGE_GRID_DEBUG_OUTPUT
 	{ 
-		wxImage img(ncols, nrows);
-		unsigned char *data = img.GetData();
-		memset(data, 0, ncols * nrows * 3);
-		for (coord_t r = 0; r < nrows; ++r) {
-			for (coord_t c = 0; c < ncols; ++c) {
-				unsigned char *pxl = data + (((nrows - r - 1) * ncols) + c) * 3;
+		std::vector<uint8_t> pixels(ncols * nrows * 3, 0);
+		for (coord_t r = 0; r < nrows; ++ r) {
+			for (coord_t c = 0; c < ncols; ++ c) {
+				uint8_t *pxl = pixels.data() + (((nrows - r - 1) * ncols) + c) * 3;
 				float d = m_signed_distance_field[r * ncols + c];
 				if (d != search_radius) {
 					float s = 255 * d / search_radius;
@@ -802,15 +798,13 @@ void EdgeGrid::Grid::calculate_sdf()
 				}
 			}
 		}
-		img.SaveFile(debug_out_path("unsigned_df-%d.png", iRun), wxBITMAP_TYPE_PNG);
+		png::write_rgb_to_file_scaled(debug_out_path("unsigned_df-%d.png", iRun), ncols, nrows, pixels, 10);
 	}
 	{
-		wxImage img(ncols, nrows);
-		unsigned char *data = img.GetData();
-		memset(data, 0, ncols * nrows * 3);
-		for (coord_t r = 0; r < nrows; ++r) {
-			for (coord_t c = 0; c < ncols; ++c) {
-				unsigned char *pxl = data + (((nrows - r - 1) * ncols) + c) * 3;
+		std::vector<uint8_t> pixels(ncols * nrows * 3, 0);
+		for (coord_t r = 0; r < nrows; ++ r) {
+			for (coord_t c = 0; c < ncols; ++ c) {
+				unsigned char *pxl = pixels.data() + (((nrows - r - 1) * ncols) + c) * 3;
 				float d = m_signed_distance_field[r * ncols + c];
 				if (d != search_radius) {
 					float s = 255 * d / search_radius;
@@ -835,9 +829,9 @@ void EdgeGrid::Grid::calculate_sdf()
 				}
 			}
 		}
-		img.SaveFile(debug_out_path("signed_df-%d.png", iRun), wxBITMAP_TYPE_PNG);
+		png::write_rgb_to_file_scaled(debug_out_path("signed_df-%d.png", iRun), ncols, nrows, pixels, 10);
 	}
-#endif /* SLIC3R_GUI */
+#endif // EDGE_GRID_DEBUG_OUTPUT
 
 	// 2) Propagate the signum.
 	#define PROPAGATE_SIGNUM_SINGLE_STEP(DELTA) do { \
@@ -909,17 +903,14 @@ void EdgeGrid::Grid::calculate_sdf()
 		}
 	}
 
-#if 0
-//#ifdef SLIC3R_GUI
+#ifdef EDGE_GRID_DEBUG_OUTPUT
 	{
-		wxImage img(ncols, nrows);
-		unsigned char *data = img.GetData();
-		memset(data, 0, ncols * nrows * 3);
+		std::vector<uint8_t> pixels(ncols * nrows * 3, 0);
 		float search_radius = float(m_resolution * 5);
 		for (coord_t r = 0; r < nrows; ++r) {
 			for (coord_t c = 0; c < ncols; ++c) {
-				unsigned char *pxl = data + (((nrows - r - 1) * ncols) + c) * 3;
-				unsigned char sign = signs[r * ncols + c];
+				uint8_t *pxl = pixels.data() + (((nrows - r - 1) * ncols) + c) * 3;
+				uint8_t sign = signs[r * ncols + c];
 				switch (sign) {
 				case 0:
 					// Positive, outside of a narrow band.
@@ -960,20 +951,17 @@ void EdgeGrid::Grid::calculate_sdf()
 				}
 			}
 		}
-		img.SaveFile(debug_out_path("signed_df-signs-%d.png", iRun), wxBITMAP_TYPE_PNG);
+		png::write_rgb_to_file_scaled(debug_out_path("signed_df-signs-%d.png", iRun), ncols, nrows, pixels, 10);
 	}
-#endif /* SLIC3R_GUI */
+#endif // EDGE_GRID_DEBUG_OUTPUT
 
-#if 0
-//#ifdef SLIC3R_GUI
+#ifdef EDGE_GRID_DEBUG_OUTPUT
 	{
-		wxImage img(ncols, nrows);
-		unsigned char *data = img.GetData();
-		memset(data, 0, ncols * nrows * 3);
+		std::vector<uint8_t> pixels(ncols * nrows * 3, 0);
 		float search_radius = float(m_resolution * 5);
 		for (coord_t r = 0; r < nrows; ++r) {
 			for (coord_t c = 0; c < ncols; ++c) {
-				unsigned char *pxl = data + (((nrows - r - 1) * ncols) + c) * 3;
+				uint8_t *pxl = pixels.data() + (((nrows - r - 1) * ncols) + c) * 3;
 				float d = m_signed_distance_field[r * ncols + c];
 				float s = 255.f * fabs(d) / search_radius;
 				int is = std::max(0, std::min(255, int(floor(s + 0.5f))));
@@ -989,9 +977,9 @@ void EdgeGrid::Grid::calculate_sdf()
 				}
 			}
 		}
-		img.SaveFile(debug_out_path("signed_df2-%d.png", iRun), wxBITMAP_TYPE_PNG);
+		png::write_rgb_to_file_scaled(debug_out_path("signed_df2-%d.png", iRun), ncols, nrows, pixels, 10);
 	}
-#endif /* SLIC3R_GUI */
+#endif // EDGE_GRID_DEBUG_OUTPUT
 }
 
 float EdgeGrid::Grid::signed_distance_bilinear(const Point &pt) const
@@ -1059,7 +1047,7 @@ float EdgeGrid::Grid::signed_distance_bilinear(const Point &pt) const
 	return f;
 }
 
-EdgeGrid::Grid::ClosestPointResult EdgeGrid::Grid::closest_point(const Point &pt, coord_t search_radius) const 
+EdgeGrid::Grid::ClosestPointResult EdgeGrid::Grid::closest_point_signed_distance(const Point &pt, coord_t search_radius) const 
 {
 	BoundingBox bbox;
 	bbox.min = bbox.max = Point(pt(0) - m_bbox.min(0), pt(1) - m_bbox.min(1));
@@ -1098,12 +1086,13 @@ EdgeGrid::Grid::ClosestPointResult EdgeGrid::Grid::closest_point(const Point &pt
 		for (int c = bbox.min(0); c <= bbox.max(0); ++ c) {
 			const Cell &cell = m_cells[r * m_cols + c];
 			for (size_t i = cell.begin; i < cell.end; ++ i) {
-				const size_t          contour_idx = m_cell_data[i].first;
-				const Slic3r::Points &pts         = *m_contours[contour_idx];
+				const size_t   contour_idx = m_cell_data[i].first;
+				const Contour &contour     = m_contours[contour_idx];
+				assert(contour.closed());
 				size_t ipt = m_cell_data[i].second;
 				// End points of the line segment.
-				const Slic3r::Point &p1 = pts[ipt];
-				const Slic3r::Point &p2 = pts[(ipt + 1 == pts.size()) ? 0 : ipt + 1];
+				const Slic3r::Point &p1 = contour.segment_start(ipt);
+				const Slic3r::Point &p2 = contour.segment_end(ipt);
 				const Slic3r::Point v_seg = p2 - p1;
 				const Slic3r::Point v_pt  = pt - p1;
 				// dot(p2-p1, pt-p1)
@@ -1115,7 +1104,7 @@ EdgeGrid::Grid::ClosestPointResult EdgeGrid::Grid::closest_point(const Point &pt
 					double dabs = sqrt(int64_t(v_pt(0)) * int64_t(v_pt(0)) + int64_t(v_pt(1)) * int64_t(v_pt(1)));
 					if (dabs < d_min) {
 						// Previous point.
-						const Slic3r::Point &p0 = pts[(ipt == 0) ? (pts.size() - 1) : ipt - 1];
+						const Slic3r::Point &p0 = contour.segment_prev(ipt);
 						Slic3r::Point v_seg_prev = p1 - p0;
 						int64_t t2_pt = int64_t(v_seg_prev(0)) * int64_t(v_pt(0)) + int64_t(v_seg_prev(1)) * int64_t(v_pt(1));
 						if (t2_pt > 0) {
@@ -1171,9 +1160,9 @@ EdgeGrid::Grid::ClosestPointResult EdgeGrid::Grid::closest_point(const Point &pt
 		assert(result.t >= 0. && result.t <= 1.);
 #ifndef NDEBUG
 		{
-			const Slic3r::Points &pts = *m_contours[result.contour_idx];
-			const Slic3r::Point  &p1  = pts[result.start_point_idx];
-			const Slic3r::Point  &p2  = pts[(result.start_point_idx + 1 == pts.size()) ? 0 : result.start_point_idx + 1];
+			const Contour   &contour = m_contours[result.contour_idx];
+			const Slic3r::Point &p1  = contour.segment_start(result.start_point_idx);
+			const Slic3r::Point &p2  = contour.segment_end(result.start_point_idx);
 			Vec2d vfoot;
 			if (result.t == 0)
 				vfoot = p1.cast<double>() - pt.cast<double>();
@@ -1227,11 +1216,12 @@ bool EdgeGrid::Grid::signed_distance_edges(const Point &pt, coord_t search_radiu
 		for (int c = bbox.min(0); c <= bbox.max(0); ++ c) {
 			const Cell &cell = m_cells[r * m_cols + c];
 			for (size_t i = cell.begin; i < cell.end; ++ i) {
-				const Slic3r::Points &pts = *m_contours[m_cell_data[i].first];
+				const Contour &contour = m_contours[m_cell_data[i].first];
+				assert(contour.closed());
 				size_t ipt = m_cell_data[i].second;
 				// End points of the line segment.
-				const Slic3r::Point &p1 = pts[ipt];
-				const Slic3r::Point &p2 = pts[(ipt + 1 == pts.size()) ? 0 : ipt + 1];
+				const Slic3r::Point &p1 = contour.segment_start(ipt);
+				const Slic3r::Point &p2 = contour.segment_end(ipt);
 				Slic3r::Point v_seg = p2 - p1;
 				Slic3r::Point v_pt  = pt - p1;
 				// dot(p2-p1, pt-p1)
@@ -1243,7 +1233,7 @@ bool EdgeGrid::Grid::signed_distance_edges(const Point &pt, coord_t search_radiu
 					double dabs = sqrt(int64_t(v_pt(0)) * int64_t(v_pt(0)) + int64_t(v_pt(1)) * int64_t(v_pt(1)));
 					if (dabs < d_min) {
 						// Previous point.
-						const Slic3r::Point &p0 = pts[(ipt == 0) ? (pts.size() - 1) : ipt - 1];
+						const Slic3r::Point &p0 = contour.segment_prev(ipt);
 						Slic3r::Point v_seg_prev = p1 - p0;
 						int64_t t2_pt = int64_t(v_seg_prev(0)) * int64_t(v_pt(0)) + int64_t(v_seg_prev(1)) * int64_t(v_pt(1));
 						if (t2_pt > 0) {
@@ -1433,26 +1423,26 @@ std::vector<std::pair<EdgeGrid::Grid::ContourEdge, EdgeGrid::Grid::ContourEdge>>
 			const Cell &cell = m_cells[r * m_cols + c];
 			// For each pair of segments in the cell:
 			for (size_t i = cell.begin; i != cell.end; ++ i) {
-				const Slic3r::Points &ipts = *m_contours[m_cell_data[i].first];
+				const Contour &icontour = m_contours[m_cell_data[i].first];
 				size_t ipt = m_cell_data[i].second;
 				// End points of the line segment and their vector.
-				const Slic3r::Point &ip1 = ipts[ipt];
-				const Slic3r::Point &ip2 = ipts[(ipt + 1 == ipts.size()) ? 0 : ipt + 1];
+				const Slic3r::Point &ip1 = icontour.segment_start(ipt);
+				const Slic3r::Point &ip2 = icontour.segment_end(ipt);
 				for (size_t j = i + 1; j != cell.end; ++ j) {
-					const Slic3r::Points &jpts = *m_contours[m_cell_data[j].first];
-					size_t 				  jpt  = m_cell_data[j].second;
+					const Contour   &jcontour = m_contours[m_cell_data[j].first];
+					size_t 				  jpt = m_cell_data[j].second;
 					// End points of the line segment and their vector.
-					const Slic3r::Point  &jp1  = jpts[jpt];
-					const Slic3r::Point  &jp2  = jpts[(jpt + 1 == jpts.size()) ? 0 : jpt + 1];
-					if (&ipts == &jpts && (&ip1 == &jp2 || &jp1 == &ip2))
+					const Slic3r::Point  &jp1 = jcontour.segment_start(jpt);
+					const Slic3r::Point  &jp2 = jcontour.segment_end(jpt);
+					if (&icontour == &jcontour && (&ip1 == &jp2 || &jp1 == &ip2))
 						// Segments of the same contour share a common vertex.
 						continue;
 					if (Geometry::segments_intersect(ip1, ip2, jp1, jp2)) {
 						// The two segments intersect. Add them to the output.
-						int jfirst = (&jpts < &ipts) || (&jpts == &ipts && jpt < ipt);
+						int jfirst = (&jcontour < &icontour) || (&jcontour == &icontour && jpt < ipt);
 						out.emplace_back(jfirst ? 
-							std::make_pair(std::make_pair(&ipts, ipt), std::make_pair(&jpts, jpt)) : 
-							std::make_pair(std::make_pair(&ipts, ipt), std::make_pair(&jpts, jpt)));
+							std::make_pair(std::make_pair(&icontour, ipt), std::make_pair(&jcontour, jpt)) : 
+							std::make_pair(std::make_pair(&icontour, ipt), std::make_pair(&jcontour, jpt)));
 					}
 				}
 			}
@@ -1470,18 +1460,18 @@ bool EdgeGrid::Grid::has_intersecting_edges() const
 			const Cell &cell = m_cells[r * m_cols + c];
 			// For each pair of segments in the cell:
 			for (size_t i = cell.begin; i != cell.end; ++ i) {
-				const Slic3r::Points &ipts = *m_contours[m_cell_data[i].first];
+				const Contour &icontour = m_contours[m_cell_data[i].first];
 				size_t ipt = m_cell_data[i].second;
 				// End points of the line segment and their vector.
-				const Slic3r::Point &ip1 = ipts[ipt];
-				const Slic3r::Point &ip2 = ipts[(ipt + 1 == ipts.size()) ? 0 : ipt + 1];
+				const Slic3r::Point &ip1 = icontour.segment_start(ipt);
+				const Slic3r::Point &ip2 = icontour.segment_end(ipt);
 				for (size_t j = i + 1; j != cell.end; ++ j) {
-					const Slic3r::Points &jpts = *m_contours[m_cell_data[j].first];
+					const Contour    &jcontour = m_contours[m_cell_data[j].first];
 					size_t 				  jpt  = m_cell_data[j].second;
 					// End points of the line segment and their vector.
-					const Slic3r::Point  &jp1  = jpts[jpt];
-					const Slic3r::Point  &jp2  = jpts[(jpt + 1 == jpts.size()) ? 0 : jpt + 1];
-					if (! (&ipts == &jpts && (&ip1 == &jp2 || &jp1 == &ip2)) && 
+					const Slic3r::Point  &jp1  = jcontour.segment_start(jpt);
+					const Slic3r::Point  &jp2  = jcontour.segment_end(jpt);
+					if (! (&icontour == &jcontour && (&ip1 == &jp2 || &jp1 == &ip2)) && 
 						Geometry::segments_intersect(ip1, ip2, jp1, jp2))
 						return true;
 				}
@@ -1491,26 +1481,18 @@ bool EdgeGrid::Grid::has_intersecting_edges() const
 	return false;
 }
 
-#if 0
-void EdgeGrid::save_png(const EdgeGrid::Grid &grid, const BoundingBox &bbox, coord_t resolution, const char *path)
+void EdgeGrid::save_png(const EdgeGrid::Grid &grid, const BoundingBox &bbox, coord_t resolution, const char *path, size_t scale)
 {
-    if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
-        wxImage::AddHandler(new wxPNGHandler);
+    coord_t w = (bbox.max(0) - bbox.min(0) + resolution - 1) / resolution;
+    coord_t h = (bbox.max(1) - bbox.min(1) + resolution - 1) / resolution;
 
-	unsigned int w = (bbox.max(0) - bbox.min(0) + resolution - 1) / resolution;
-	unsigned int h = (bbox.max(1) - bbox.min(1) + resolution - 1) / resolution;
-	wxImage img(w, h);
-    unsigned char *data = img.GetData();
-    memset(data, 0, w * h * 3);
+	std::vector<uint8_t> pixels(w * h * 3, 0);
 
-	static int iRun = 0;
-	++iRun;
-    
     const coord_t search_radius = grid.resolution() * 2;
 	const coord_t display_blend_radius = grid.resolution() * 2;
 	for (coord_t r = 0; r < h; ++r) {
     	for (coord_t c = 0; c < w; ++ c) {
-			unsigned char *pxl = data + (((h - r - 1) * w) + c) * 3;
+			unsigned char *pxl = pixels.data() + (((h - r - 1) * w) + c) * 3;
 			Point pt(c * resolution + bbox.min(0), r * resolution + bbox.min(1));
 			coordf_t min_dist;
 			bool on_segment = true;
@@ -1584,9 +1566,8 @@ void EdgeGrid::save_png(const EdgeGrid::Grid &grid, const BoundingBox &bbox, coo
 		}
     }
 
-    img.SaveFile(path, wxBITMAP_TYPE_PNG);
+	png::write_rgb_to_file_scaled(path, w, h, pixels, scale);
 }
-#endif /* SLIC3R_GUI */
 
 // Find all pairs of intersectiong edges from the set of polygons.
 std::vector<std::pair<EdgeGrid::Grid::ContourEdge, EdgeGrid::Grid::ContourEdge>> intersecting_edges(const Polygons &polygons)
@@ -1625,22 +1606,27 @@ void export_intersections_to_svg(const std::string &filename, const Polygons &po
     SVG svg(filename.c_str(), bbox);
     svg.draw(union_ex(polygons), "gray", 0.25f);
     svg.draw_outline(polygons, "black");
-    std::set<const Points*> intersecting_contours;
+    std::set<const EdgeGrid::Contour*> intersecting_contours;
     for (const std::pair<EdgeGrid::Grid::ContourEdge, EdgeGrid::Grid::ContourEdge> &ie : intersections) {
     	intersecting_contours.insert(ie.first.first);
     	intersecting_contours.insert(ie.second.first);
     }
     // Highlight the contours with intersections.
     coord_t line_width = coord_t(scale_(0.01));
-    for (const Points *ic : intersecting_contours) {
-	    svg.draw_outline(Polygon(*ic), "green");
-	    svg.draw_outline(Polygon(*ic), "black", line_width);
+    for (const EdgeGrid::Contour *ic : intersecting_contours) {
+		if (ic->open())
+			svg.draw(Polyline(Points(ic->begin(), ic->end())), "green");
+		else {
+			Polygon polygon(Points(ic->begin(), ic->end()));
+			svg.draw_outline(polygon, "green");
+			svg.draw_outline(polygon, "black", line_width);
+		}
     }
 	// Paint the intersections.
     for (const std::pair<EdgeGrid::Grid::ContourEdge, EdgeGrid::Grid::ContourEdge> &intersecting_edges : intersections) {
     	auto edge = [](const EdgeGrid::Grid::ContourEdge &e) {
-    		return Line(e.first->at(e.second),
-    					e.first->at((e.second + 1 == e.first->size()) ? 0 : e.second + 1));
+    		return Line(e.first->segment_start(e.second),
+    					e.first->segment_end(e.second));
     	};
         svg.draw(edge(intersecting_edges.first), "red", line_width);
         svg.draw(edge(intersecting_edges.second), "red", line_width);

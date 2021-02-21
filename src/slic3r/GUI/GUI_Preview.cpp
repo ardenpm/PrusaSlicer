@@ -36,11 +36,8 @@ View3D::View3D(wxWindow* parent, Model* model, DynamicPrintConfig* config, Backg
 
 View3D::~View3D()
 {
-    if (m_canvas != nullptr)
-        delete m_canvas;
-
-    if (m_canvas_widget != nullptr)
-        delete m_canvas_widget;
+    delete m_canvas;
+    delete m_canvas_widget;
 }
 
 bool View3D::init(wxWindow* parent, Model* model, DynamicPrintConfig* config, BackgroundSlicingProcess* process)
@@ -169,27 +166,10 @@ void View3D::render()
 Preview::Preview(
     wxWindow* parent, Model* model, DynamicPrintConfig* config,
     BackgroundSlicingProcess* process, GCodeProcessor::Result* gcode_result, std::function<void()> schedule_background_process_func)
-    : m_canvas_widget(nullptr)
-    , m_canvas(nullptr)
-    , m_left_sizer(nullptr)
-    , m_layers_slider_sizer(nullptr)
-    , m_bottom_toolbar_panel(nullptr)
-    , m_label_view_type(nullptr)
-    , m_choice_view_type(nullptr)
-    , m_label_show(nullptr)
-    , m_combochecklist_features(nullptr)
-    , m_combochecklist_features_pos(0)
-    , m_combochecklist_options(nullptr)
-    , m_config(config)
+    : m_config(config)
     , m_process(process)
     , m_gcode_result(gcode_result)
-    , m_number_extruders(1)
-    , m_preferred_color_mode("feature")
-    , m_loaded(false)
     , m_schedule_background_process(schedule_background_process_func)
-#ifdef __linux__
-    , m_volumes_cleanup_required(false)
-#endif // __linux__
 {
     if (init(parent, model))
         load_print();
@@ -262,6 +242,7 @@ bool Preview::init(wxWindow* parent, Model* model)
     m_combochecklist_options->Create(m_bottom_toolbar_panel, wxID_ANY, _L("Options"), wxDefaultPosition, wxDefaultSize, wxCB_READONLY);
     std::string options_items = GUI::into_u8(
         get_option_type_string(OptionType::Travel) + "|0|" +
+        get_option_type_string(OptionType::Wipe) + "|0|" +
         get_option_type_string(OptionType::Retractions) + "|0|" +
         get_option_type_string(OptionType::Unretractions) + "|0|" +
         get_option_type_string(OptionType::ToolChanges) + "|0|" +
@@ -331,20 +312,6 @@ void Preview::set_as_dirty()
         m_canvas->set_as_dirty();
 }
 
-void Preview::set_number_extruders(unsigned int number_extruders)
-{
-    if (m_number_extruders != number_extruders) {
-        m_number_extruders = number_extruders;
-        int tool_idx = m_choice_view_type->FindString(_(L("Tool")));
-        int type = (number_extruders > 1) ? tool_idx /* color by a tool number */  : 0; // color by a feature type
-        m_choice_view_type->SetSelection(type);
-        if (0 <= type && (type < static_cast<int>(GCodeViewer::EViewType::Count)))
-            m_canvas->set_gcode_view_preview_type(static_cast<GCodeViewer::EViewType>(type));
-
-        m_preferred_color_mode = (type == tool_idx) ? "tool_or_feature" : "feature";
-    }
-}
-
 void Preview::bed_shape_changed()
 {
     if (m_canvas != nullptr)
@@ -384,7 +351,7 @@ void Preview::reload_print(bool keep_volumes)
         m_volumes_cleanup_required = !keep_volumes;
         return;
     }
-#endif /* __linux __ */
+#endif /* __linux__ */
     if (
 #ifdef __linux__
         m_volumes_cleanup_required || 
@@ -424,6 +391,12 @@ void Preview::msw_rescale()
     refresh_print();
 }
 
+void Preview::sys_color_changed()
+{
+    if (m_layers_slider != nullptr)
+        m_layers_slider->sys_color_changed();
+}
+
 void Preview::jump_layers_slider(wxKeyEvent& evt)
 {
     if (m_layers_slider) m_layers_slider->OnChar(evt);
@@ -457,6 +430,11 @@ void Preview::unbind_event_handlers()
     m_moves_slider->Unbind(wxEVT_SCROLL_CHANGED, &Preview::on_moves_slider_scroll_changed, this);
 }
 
+void Preview::move_moves_slider(wxKeyEvent& evt)
+{
+    if (m_moves_slider != nullptr) m_moves_slider->OnKeyDown(evt);
+}
+
 void Preview::hide_layers_slider()
 {
     m_layers_slider_sizer->Hide((size_t)0);
@@ -471,11 +449,11 @@ void Preview::on_size(wxSizeEvent& evt)
 
 void Preview::on_choice_view_type(wxCommandEvent& evt)
 {
-    m_preferred_color_mode = (m_choice_view_type->GetStringSelection() == L("Tool")) ? "tool" : "feature";
     int selection = m_choice_view_type->GetCurrentSelection();
-    if (0 <= selection && selection < static_cast<int>(GCodeViewer::EViewType::Count))
+    if (0 <= selection && selection < static_cast<int>(GCodeViewer::EViewType::Count)) {
         m_canvas->set_toolpath_view_type(static_cast<GCodeViewer::EViewType>(selection));
-
+        m_keep_current_preview_type = true;
+    }
     refresh_print();
 }
 
@@ -488,49 +466,14 @@ void Preview::on_combochecklist_features(wxCommandEvent& evt)
 
 void Preview::on_combochecklist_options(wxCommandEvent& evt)
 {
-    auto xored = [](unsigned int flags1, unsigned int flags2, unsigned int flag) {
-        auto is_flag_set = [](unsigned int flags, unsigned int flag) {
-            return (flags & (1 << flag)) != 0;
-        };
-        return !is_flag_set(flags1, flag) != !is_flag_set(flags2, flag);
-    };
-
     unsigned int curr_flags = m_canvas->get_gcode_options_visibility_flags();
     unsigned int new_flags = Slic3r::GUI::combochecklist_get_flags(m_combochecklist_options);
     if (curr_flags == new_flags)
         return;
 
     m_canvas->set_gcode_options_visibility_from_flags(new_flags);
-
-    bool skip_refresh = xored(curr_flags, new_flags, static_cast<unsigned int>(OptionType::Shells)) ||
-        xored(curr_flags, new_flags, static_cast<unsigned int>(OptionType::ToolMarker));
-
-    if (!skip_refresh)
-        refresh_print();
-    else
-        m_canvas->set_as_dirty();
-}
-
-void Preview::update_view_type(bool keep_volumes)
-{
-    const DynamicPrintConfig& config = wxGetApp().preset_bundle->project_config;
-
-    const wxString& choice = !wxGetApp().plater()->model().custom_gcode_per_print_z.gcodes.empty() /*&&
-                             (wxGetApp().extruders_edited_cnt()==1 || !slice_completed) */? 
-                                _L("Color Print") :
-                                config.option<ConfigOptionFloats>("wiping_volumes_matrix")->values.size() > 1 ?
-                                    _L("Tool") : 
-                                    _L("Feature type");
-
-    int type = m_choice_view_type->FindString(choice);
-    if (m_choice_view_type->GetSelection() != type) {
-        m_choice_view_type->SetSelection(type);
-        if (0 <= type && type < static_cast<int>(GCodeViewer::EViewType::Count))
-            m_canvas->set_gcode_view_preview_type(static_cast<GCodeViewer::EViewType>(type));
-        m_preferred_color_mode = "feature";
-    }
-
-    reload_print(keep_volumes);
+    m_canvas->refresh_gcode_preview_render_paths();
+    update_moves_slider();
 }
 
 void Preview::update_bottom_toolbar()
@@ -588,7 +531,8 @@ wxBoxSizer* Preview::create_layers_slider_sizer()
         model.custom_gcode_per_print_z = m_layers_slider->GetTicksValues();
         m_schedule_background_process();
 
-        update_view_type(false);
+        m_keep_current_preview_type = false;
+        reload_print(false);
         });
 
     return sizer;
@@ -762,12 +706,17 @@ void Preview::update_layers_slider_from_canvas(wxKeyEvent& event)
 
     const auto key = event.GetKeyCode();
 
-    if (key == 'U' || key == 'D') {
-        const int new_pos = key == 'U' ? m_layers_slider->GetHigherValue() + 1 : m_layers_slider->GetHigherValue() - 1;
+    if (key == 'S' || key == 'W') {
+        const int new_pos = key == 'W' ? m_layers_slider->GetHigherValue() + 1 : m_layers_slider->GetHigherValue() - 1;
         m_layers_slider->SetHigherValue(new_pos);
         if (event.ShiftDown() || m_layers_slider->is_one_layer()) m_layers_slider->SetLowerValue(m_layers_slider->GetHigherValue());
     }
-    else if (key == 'S')
+    else if (key == 'A' || key == 'D') {
+        const int new_pos = key == 'D' ? m_moves_slider->GetHigherValue() + 1 : m_moves_slider->GetHigherValue() - 1;
+        m_moves_slider->SetHigherValue(new_pos);
+        if (event.ShiftDown() || m_moves_slider->is_one_layer()) m_moves_slider->SetLowerValue(m_moves_slider->GetHigherValue());
+    }
+    else if (key == 'X')
         m_layers_slider->ChangeOneLayerLock();
     else if (key == WXK_SHIFT)
         m_layers_slider->UseDefaultColors(false);
@@ -783,12 +732,25 @@ void Preview::update_moves_slider()
         return;
 
     std::vector<double> values(view.endpoints.last - view.endpoints.first + 1);
+#if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
+    std::vector<double> alternate_values(view.endpoints.last - view.endpoints.first + 1);
+#endif // ENABLE_GCODE_LINES_ID_IN_H_SLIDER
     unsigned int count = 0;
     for (unsigned int i = view.endpoints.first; i <= view.endpoints.last; ++i) {
+#if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
+        values[count] = static_cast<double>(i + 1);
+        if (view.gcode_ids[i] > 0)
+            alternate_values[count] = static_cast<double>(view.gcode_ids[i]);
+        ++count;
+#else
         values[count++] = static_cast<double>(i + 1);
+#endif // ENABLE_GCODE_LINES_ID_IN_H_SLIDER
     }
 
     m_moves_slider->SetSliderValues(values);
+#if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
+    m_moves_slider->SetSliderAlternateValues(alternate_values);
+#endif // ENABLE_GCODE_LINES_ID_IN_H_SLIDER
     m_moves_slider->SetMaxValue(view.endpoints.last - view.endpoints.first);
     m_moves_slider->SetSelectionSpan(view.current.first - view.endpoints.first, view.current.last - view.endpoints.first);
 }
@@ -840,19 +802,6 @@ void Preview::load_print_as_fff(bool keep_z_range)
         return;
     }
 
-    if (m_preferred_color_mode == "tool_or_feature") {
-        // It is left to Slic3r to decide whether the print shall be colored by the tool or by the feature.
-        // Color by feature if it is a single extruder print.
-        unsigned int number_extruders = (unsigned int)print->extruders().size();
-        int tool_idx = m_choice_view_type->FindString(_L("Tool"));
-        int type = (number_extruders > 1) ? tool_idx /* color by a tool number */ : 0; // color by a feature type
-        m_choice_view_type->SetSelection(type);
-        if (0 <= type && type < static_cast<int>(GCodeViewer::EViewType::Count))
-            m_canvas->set_gcode_view_preview_type(static_cast<GCodeViewer::EViewType>(type));
-        // If the->SetSelection changed the following line, revert it to "decide yourself".
-        m_preferred_color_mode = "tool_or_feature";
-    }
-
     GCodeViewer::EViewType gcode_view_type = m_canvas->get_gcode_view_preview_type();
     bool gcode_preview_data_valid = !m_gcode_result->moves.empty();
     // Collect colors per extruder.
@@ -900,6 +849,22 @@ void Preview::load_print_as_fff(bool keep_z_range)
         } else
             update_layers_slider(zs, keep_z_range);
     }
+
+    unsigned int number_extruders = (unsigned int)print->extruders().size();
+
+    if (!m_keep_current_preview_type) {
+        const wxString choice = !wxGetApp().plater()->model().custom_gcode_per_print_z.gcodes.empty() ?
+            _L("Color Print") :
+            (number_extruders > 1) ? _L("Tool") : _L("Feature type");
+
+        int type = m_choice_view_type->FindString(choice);
+        if (m_choice_view_type->GetSelection() != type) {
+            if (0 <= type && type < static_cast<int>(GCodeViewer::EViewType::Count)) {
+                m_choice_view_type->SetSelection(type);
+                m_canvas->set_gcode_view_preview_type(static_cast<GCodeViewer::EViewType>(type));
+            }
+        }
+    }
 }
 
 void Preview::load_print_as_sla()
@@ -921,6 +886,7 @@ void Preview::load_print_as_sla()
     sort_remove_duplicates(zs);
 
     m_canvas->reset_clipping_planes_cache();
+    m_canvas->set_use_clipping_planes(true);
 
     n_layers = (unsigned int)zs.size();
     if (n_layers == 0) {
@@ -954,7 +920,6 @@ void Preview::on_layers_slider_scroll_changed(wxCommandEvent& event)
         else if (tech == ptSLA) {
             m_canvas->set_clipping_plane(0, ClippingPlane(Vec3d::UnitZ(), -m_layers_slider->GetLowerValueD()));
             m_canvas->set_clipping_plane(1, ClippingPlane(-Vec3d::UnitZ(), m_layers_slider->GetHigherValueD()));
-            m_canvas->set_use_clipping_planes(m_layers_slider->GetHigherValue() != 0);
             m_canvas->render();
         }
     }
@@ -971,6 +936,7 @@ wxString Preview::get_option_type_string(OptionType type) const
     switch (type)
     {
     case OptionType::Travel:        { return _L("Travel"); }
+    case OptionType::Wipe:          { return _L("Wipe"); }
     case OptionType::Retractions:   { return _L("Retractions"); }
     case OptionType::Unretractions: { return _L("Deretractions"); }
     case OptionType::ToolChanges:   { return _L("Tool changes"); }
